@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/interfaces/IERC165.sol";
-interface IAccessChannelManager is IERC165 {
+/**
+ * @title IAccessChannelManager
+ * @dev Interface for managing scalable access channels with unlimited members
+ * @author Your Team
+ */
+interface IAccessChannelManager {
+
+    // =============================================================
+    //                        CHANNEL MANAGEMENT
+    // =============================================================
 
     /**
      * Function to create a new channel.
-     * @param channelName - The name of the channel to create
+     * @param channelName The name of the channel to create
      */
     function createChannel(bytes32 channelName) external;
 
@@ -21,6 +29,10 @@ interface IAccessChannelManager is IERC165 {
      * @param channelName The name of the channel to desactivate
      */
     function desactivateChannel(bytes32 channelName) external;
+
+    // =============================================================
+    //                        MEMBER MANAGEMENT
+    // =============================================================
     
     /**
      * Function to add a member to a channel.
@@ -35,50 +47,121 @@ interface IAccessChannelManager is IERC165 {
      * @param member The address of the member to remove
      */
     function removeChannelMember(bytes32 channelName, address member) external;
+
+    /**
+     * Function to add multiple members to a channel.
+     * @param channelName The name of the channel
+     * @param members Array of addresses of the members to add
+     */
+    function addChannelMembers(bytes32 channelName, address[] calldata members) external;
+
+    /**
+     * Function to remove multiple members from a channel.
+     * @param channelName The name of the channel
+     * @param members Array of addresses of the members to remove
+     */
+    function removeChannelMembers(bytes32 channelName, address[] calldata members) external;
+
+
+    // =============================================================
+    //                        VIEW FUNCTIONS
+    // =============================================================
     
     /**
      * Function to check if a member is a part of a channel.
      * @param channelName The name of the channel
      * @param member The address of the member to check
+     * @return True if the member is a part of the channel, false otherwise
      */
     function isChannelMember(bytes32 channelName, address member) external view returns (bool);
 
     /**
-     * Function to get all members of a channel.
+     * 
      * @param channelName The name of the channel
+     * @param page Page number (1-indexed)
+     * @param pageSize Number of members per page
+     * @return members Array of addresses of the members in the channel
+     * @return totalMembers Total number of members in the channel
+     * @return totalPages Total number of pages
+     * @return hasNextPage Whether there is a next page
      */
-    function getChannelMembers(bytes32 channelName) external view returns (address[] memory);
+    function getChannelMembersPaginated(
+        bytes32 channelName, 
+        uint256 page, 
+        uint256 pageSize
+    ) external view returns (
+        address[] memory members,
+        uint256 totalMembers,
+        uint256 totalPages,
+        bool hasNextPage
+    );
 
     /**
-     * Event emitted when a channel is created.
+     * Function to get information about a channel.
      * @param channelName The name of the channel
-     * @param creator Address of the creator of the channel
+     * @return exists Whether the channel exists
+     * @return isActive Whether the channel is active
+     * @return creator Address of the creator of the channel
+     * @return memberCount Number of members in the channel
+     * @return createdAt Block timestamp when the channel was created
      */
-    event ChannelCreated(bytes32 indexed channelName, address creator);
+    function getChannelInfo(bytes32 channelName) external view returns (
+        bool exists,
+        bool isActive,
+        address creator,
+        uint256 memberCount,
+        uint256 createdAt
+    );
 
     /**
-     * Event emitted when a channel is activated.
-     * @param channelName The name of the channel
+     * Function to get the total number of channels.
      */
-    event ChannelActivated(bytes32 indexed channelName);
+    function getChannelCount() external view returns (uint256);
 
     /**
-     * Event emitted when a channel is desactivated.
-     * @param channelName The name of the channel
+     * Function to get the total number of channels.
+     * @param page Page number (1-indexed)
+     * @param pageSize Number of channels per page
+     * @return channels Array of names of the channels
+     * @return totalChannels Total number of channels
+     * @return totalPages Total number of pages
+     * @return hasNextPage Whether there is a next page
      */
-    event ChannelDesactivated(bytes32 indexed channelName);
+    function getAllChannelsPaginated(
+        uint256 page,
+        uint256 pageSize
+    ) external view returns (
+        bytes32[] memory channels,
+        uint256 totalChannels,
+        uint256 totalPages,
+        bool hasNextPage
+    );
 
     /**
-     * Event emitted when a member is added to a channel.
+     * Function to get the total number of members in a channel.
      * @param channelName The name of the channel
-     * @param member Address of the member added
      */
-    event ChannelMemberAdded(bytes32 indexed channelName, address member);
+    function getChannelMemberCount(bytes32 channelName) external view returns (uint256);
 
     /**
-     * Event emitted when a member is removed from a channel.
+     * Function to check if multiple members are part of a channel.
      * @param channelName The name of the channel
-     * @param member Address of the member removed
+     * @param members Array of addresses of the members to check
      */
-    event ChannelMemberRemoved(bytes32 indexed channelName, address member);
+    function areChannelMembers(
+        bytes32 channelName, 
+        address[] calldata members
+    ) external view returns (bool[] memory results);
+
+
+    // =============================================================
+    //                           EVENTS
+    // =============================================================
+    event ChannelCreated(bytes32 indexed channelName, address indexed creator, uint256 timestamp);
+    event ChannelActivated(bytes32 indexed channelName, uint256 timestamp);
+    event ChannelDeactivated(bytes32 indexed channelName, uint256 timestamp);
+    event ChannelMemberAdded(bytes32 indexed channelName, address indexed member, uint256 newMemberCount);
+    event ChannelMemberRemoved(bytes32 indexed channelName, address indexed member, uint256 newMemberCount);
+    event ChannelMembersAdded(bytes32 indexed channelName, address[] members, uint256 newMemberCount);
+    event ChannelMembersRemoved(bytes32 indexed channelName, address[] members, uint256 newMemberCount);
 }
