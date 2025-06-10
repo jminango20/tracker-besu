@@ -45,7 +45,9 @@ string constant VERSION = "1.0.0";
     
 /// @dev Contract name for events and metadata
 string constant CONTRACT_NAME = "AccessChannelManager";
-    
+
+/// @dev Contract name of AccessChannelManager
+bytes32 constant ACCESS_CHANNEL_MANAGER = keccak256("ACCESS_CHANNEL_MANAGER");
     
 // =============================================================
 //                        STATUS FLAGS
