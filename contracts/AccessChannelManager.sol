@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {IAccessChannelManager} from "./interfaces/IAccessChannelManager.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {AccessChannelValidations} from "./lib/AccessChannelValidations .sol";
+import {AccessChannelValidations} from "./lib/AccessChannelValidations.sol";
 import {
     DEFAULT_ADMIN_ROLE, 
     CHANNEL_AUTHORITY_ROLE, 
