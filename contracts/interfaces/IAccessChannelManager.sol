@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 /**
  * @title IAccessChannelManager
  * @dev Interface for managing scalable access channels with unlimited members
- * @author Your Team
+ * @author Juan Minango
  */
 interface IAccessChannelManager {
 
@@ -76,7 +76,7 @@ interface IAccessChannelManager {
     function isChannelMember(bytes32 channelName, address member) external view returns (bool);
 
     /**
-     * 
+     * Function to get the members of a channel.
      * @param channelName The name of the channel
      * @param page Page number (1-indexed)
      * @param pageSize Number of members per page
@@ -115,6 +115,7 @@ interface IAccessChannelManager {
 
     /**
      * Function to get the total number of channels.
+     * @return totalChannels Total number of channels
      */
     function getChannelCount() external view returns (uint256);
 
@@ -140,6 +141,7 @@ interface IAccessChannelManager {
     /**
      * Function to get the total number of members in a channel.
      * @param channelName The name of the channel
+     * @return memberCount Number of members in the channel
      */
     function getChannelMemberCount(bytes32 channelName) external view returns (uint256);
 
@@ -147,6 +149,7 @@ interface IAccessChannelManager {
      * Function to check if multiple members are part of a channel.
      * @param channelName The name of the channel
      * @param members Array of addresses of the members to check
+     * @return results Array of booleans indicating if each member is a part of the channel
      */
     function areChannelMembers(
         bytes32 channelName, 

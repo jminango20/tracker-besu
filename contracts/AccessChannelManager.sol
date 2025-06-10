@@ -11,7 +11,9 @@ import {
     CHANNEL_ADMIN_ROLE,
     MAX_BATCH_SIZE,
     DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE
+    MAX_PAGE_SIZE,
+    INVALID_PAGE,
+    FIRST_PAGE
     } from "./lib/Constants.sol";
 
 
@@ -117,10 +119,8 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
         _grantRole(CHANNEL_ADMIN_ROLE, _msgSender());
     }
 
-
     /**
-     * Function to create a new channel.
-     * @param channelName The name of the channel to create
+     * @inheritdoc IAccessChannelManager
      */
     function createChannel(bytes32 channelName) external onlyRole(CHANNEL_AUTHORITY_ROLE) {
 
@@ -141,8 +141,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to activate a channel.
-     * @param channelName The name of the channel to activate
+     * @inheritdoc IAccessChannelManager
      */
     function activateChannel(bytes32 channelName) external onlyRole(CHANNEL_AUTHORITY_ROLE) validChannel(channelName) {
 
@@ -162,8 +161,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to desactivate a channel.
-     * @param channelName The name of the channel to desactivate
+     * @inheritdoc IAccessChannelManager
      */
     function desactivateChannel(bytes32 channelName) external onlyRole(CHANNEL_AUTHORITY_ROLE) validChannel(channelName) {
         
@@ -179,9 +177,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     // =============================================================
     
     /**
-     * Function to add a member to a channel.
-     * @param channelName The name of the channel
-     * @param member Address of the member to add
+     * @inheritdoc IAccessChannelManager
      */
     function addChannelMember(bytes32 channelName, address member) 
         external 
@@ -194,9 +190,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
 
 
     /**
-     * Function to add multiple members to a channel.
-     * @param channelName The name of the channel
-     * @param members Array of addresses of the members to add
+     * @inheritdoc IAccessChannelManager
      */
     function addChannelMembers(bytes32 channelName, address[] calldata members) 
         external 
@@ -231,9 +225,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
     
     /**
-     * Function to remove a member from a channel.
-     * @param channelName The name of the channel
-     * @param member The address of the member to remove
+     * @inheritdoc IAccessChannelManager
      */
     function removeChannelMember(bytes32 channelName, address member) 
         external 
@@ -251,9 +243,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to remove multiple members from a channel.
-     * @param channelName The name of the channel
-     * @param members Array of addresses of the members to remove
+     * @inheritdoc IAccessChannelManager
      */
     function removeChannelMembers(bytes32 channelName, address[] calldata members) 
         external 
@@ -284,9 +274,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     // =============================================================
     
     /**
-     * Function to check if a member is a part of a channel.
-     * @param channelName The name of the channel
-     * @param member The address of the member to check
+     * @inheritdoc IAccessChannelManager
      */
     function isChannelMember(bytes32 channelName, address member) 
         external 
@@ -299,14 +287,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to get the members of a channel.
-     * @param channelName The name of the channel
-     * @param page Page number (1-indexed)
-     * @param pageSize Page size
-     * @return members Array of addresses of the members
-     * @return totalMembers Total number of members
-     * @return totalPages Total number of pages
-     * @return hasNextPage Boolean indicating if there is a next page
+     * @inheritdoc IAccessChannelManager
      */
     function getChannelMembersPaginated(bytes32 channelName, uint256 page, uint256 pageSize) 
         external 
@@ -319,8 +300,8 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
             bool hasNextPage
         ) 
     {
-        if (page == 0) revert AccessChannelValidations.InvalidPageNumber(page);
-        if (pageSize == 0 || pageSize > MAX_PAGE_SIZE) revert AccessChannelValidations.InvalidPageSize(pageSize);
+        if (page == INVALID_PAGE) revert AccessChannelValidations.InvalidPageNumber(page);
+        if (pageSize == INVALID_PAGE || pageSize > MAX_PAGE_SIZE) revert AccessChannelValidations.InvalidPageSize(pageSize);
         
         Channel storage channel = _channels[channelName];
         totalMembers = channel.memberCount;
@@ -329,13 +310,13 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
             return (new address[](0), 0, 0, false);
         }
         
-        totalPages = (totalMembers + pageSize - 1) / pageSize; // Ceiling division
+        totalPages = (totalMembers + pageSize - FIRST_PAGE) / pageSize; // Ceiling division
         
         if (page > totalPages) {
             return (new address[](0), totalMembers, totalPages, false);
         }
         
-        uint256 startIndex = (page - 1) * pageSize;
+        uint256 startIndex = (page - FIRST_PAGE) * pageSize;
         uint256 endIndex = startIndex + pageSize;
         if (endIndex > totalMembers) {
             endIndex = totalMembers;
@@ -352,13 +333,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to get the channel info.
-     * @param channelName The name of the channel
-     * @return exists Boolean indicating if the channel exists
-     * @return isActive Boolean indicating if the channel is active
-     * @return creator Address of the creator of the channel
-     * @return memberCount Number of members in the channel
-     * @return createdAt Timestamp of when the channel was created
+     * @inheritdoc IAccessChannelManager
      */
     function getChannelInfo(bytes32 channelName) 
         external 
@@ -376,22 +351,15 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to get the number of channels.
-     * @return count Number of channels
+     * @inheritdoc IAccessChannelManager
      */
     function getChannelCount() external view returns (uint256) {
         return _channelCount;
     }
 
     /**
-     * Function to get all channels.
-     * @param page Number of the page
-     * @param pageSize Page size
-     * @return channels Array of channel names
-     * @return totalChannels Total number of channels
-     * @return totalPages Total number of pages
-     * @return hasNextPage Boolean indicating if there is a next page
-    */
+     * @inheritdoc IAccessChannelManager
+     */
     function getAllChannelsPaginated(
         uint256 page,
         uint256 pageSize
@@ -405,8 +373,8 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
             bool hasNextPage
         ) 
     {
-        if (page == 0) revert AccessChannelValidations.InvalidPageNumber(page);
-        if (pageSize == 0 || pageSize > MAX_PAGE_SIZE) revert AccessChannelValidations.InvalidPageSize(pageSize);
+        if (page == INVALID_PAGE) revert AccessChannelValidations.InvalidPageNumber(page);
+        if (pageSize == INVALID_PAGE || pageSize > MAX_PAGE_SIZE) revert AccessChannelValidations.InvalidPageSize(pageSize);
         
         totalChannels = _channelCount;
         
@@ -414,13 +382,13 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
             return (new bytes32[](0), 0, 0, false);
         }
         
-        totalPages = (totalChannels + pageSize - 1) / pageSize;
+        totalPages = (totalChannels + pageSize - FIRST_PAGE) / pageSize;
         
         if (page > totalPages) {
             return (new bytes32[](0), totalChannels, totalPages, false);
         }
         
-        uint256 startIndex = (page - 1) * pageSize;
+        uint256 startIndex = (page - FIRST_PAGE) * pageSize;
         uint256 endIndex = startIndex + pageSize;
         if (endIndex > totalChannels) {
             endIndex = totalChannels;
@@ -437,8 +405,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to get the number of members in a channel.
-     * @param channelName The name of the channel
+     * @inheritdoc IAccessChannelManager
      */
     function getChannelMemberCount(bytes32 channelName) 
         external 
@@ -450,9 +417,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     /**
-     * Function to check if members are in a channel.
-     * @param channelName The name of the channel
-     * @param members Array of addresses of the members to check
+     * @inheritdoc IAccessChannelManager
      */
     function areChannelMembers(
         bytes32 channelName, 

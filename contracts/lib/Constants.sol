@@ -14,6 +14,8 @@ bytes32 constant CHANNEL_AUTHORITY_ROLE = keccak256("CHANNEL_AUTHORITY_ROLE");
     
 /// @dev Role for channel admin operations (add/remove members)
 bytes32 constant CHANNEL_ADMIN_ROLE = keccak256("CHANNEL_ADMIN_ROLE");
+
+bytes32 constant ADDRESS_DISCOVERY_ADMIN_ROLE = keccak256("ADDRESS_DISCOVERY_ADMIN_ROLE");
    
 // =============================================================
 //                        SYSTEM LIMITS
