@@ -156,6 +156,47 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
         );
     }
 
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function deprecateSchema(bytes32 schemaId, bytes32 channelName)
+        external 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+    {
+        if (schemaId == bytes32(0)) revert InvalidSchemaId();
+
+        if (!_schemaExistsByChannelName[channelName][schemaId]) {
+            revert SchemaNotFoundInChannel(channelName, schemaId);
+        }
+
+        Schema storage schema = _schemasByChannelName[channelName][schemaId];
+
+        if (schema.owner != _msgSender()) {
+            revert NotSchemaOwner(schemaId, _msgSender());
+        }
+
+        if (schema.status != SchemaStatus.ACTIVE) {
+            revert SchemaNotActive(schemaId, schema.status);
+        }
+
+        schema.status = SchemaStatus.DEPRECATED;
+        schema.updatedAt = block.timestamp;
+
+        _isActiveSchemaIdByChannel[channelName][schemaId] = false;
+
+        unchecked {
+            _activeSchemaCount[channelName]--;
+        }
+
+        emit SchemaDeprecated(
+            schemaId, 
+            schema.owner, 
+            channelName, 
+            block.timestamp
+        );
+    }
+
     // =============================================================
     //                    INTERNAL FUNCTIONS
     // =============================================================

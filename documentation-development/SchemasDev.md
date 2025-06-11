@@ -49,3 +49,29 @@ COMO rede blockchain QUERO validar os dados de um esquema PARA adicioná-lo na l
 - **Status ativo:**  `SchemaStatus.ACTIVE` - situação definida como ativo.
 - **Timestamp:** `block.timestamp` - registro automático da transação.
 - **Domínio público:** `SchemaCreated` event - visibilidade na rede.
+
+
+***
+## `deprecateSchema`
+### Descrição
+COMO rede blockchain QUERO atualizar a situação de um esquema PARA descontinuado.
+
+### Regras de Negócio
+Como rede blockchain quero atualizar a situação de um esquema para descontinuado, motivo pelo qual como parâmetro de entrada deve ser informado o identificador do esquema
+e o nome do canal onde o esquema está armazenado.
+
+#### Cumprimento das Regras de Negócio
+- **Permissões:** `onlyChannelMember(channelName)` - garante que apenas membros autorizados do canal podem deprecar schemas.
+- **Parâmetros obrigatórios:** Validação de `schemaId` (não pode ser zero) e `channelName` (validado por modifier).
+- **Existência do schema:** `_schemaExistsByChannelName[channelName][schemaId]` - verifica se o schema existe no canal especificado.
+- **Controle de propriedade:** `schema.owner != _msgSender()` - apenas o proprietário original pode deprecar o schema.
+- **Status válido:** `schema.status != SchemaStatus.ACTIVE` - só permite deprecar schemas que estão ativos.
+- **Atualização de situação:** `schema.status = SchemaStatus.DEPRECATED` - muda situação para descontinuado.
+- **Timestamp:** `schema.updatedAt = block.timestamp` - registro automático da atualização.
+- **Domínio público:** `SchemaDeprecated` event - visibilidade da operação na rede.
+
+#### **Considerações Adicionais a Avaliar**
+- Verificação de uso ativo: Considerar validar se o schema não está sendo usado em processos ativos antes de permitir depreciação.
+- Dependências: Verificar se outros schemas ou processos dependem deste schema.
+- Versionamento: Avaliar impacto em outras versões do mesmo schema (se existirem).
+- Reversibilidade: Considerar se schemas depreciados podem voltar a ser ativos ou se é operação irreversível.

@@ -58,6 +58,13 @@ interface ISchemaRegistry {
         uint256 timestamp
     );
 
+    event SchemaDeprecated(
+        bytes32 indexed schemaId, 
+        address indexed owner, 
+        bytes32 indexed channelName, 
+        uint256 timestamp
+    );
+
     // =============================================================
     //                        CUSTOM ERRORS
     // =============================================================
@@ -69,7 +76,9 @@ interface ISchemaRegistry {
     error InvalidDataHash();
     error DescriptionTooLong();
     error SchemaAlreadyExists(bytes32 schemaId);
-
+    error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId);
+    error NotSchemaOwner(bytes32 schemaId, address owner);
+    error SchemaNotActive(bytes32 schemaId, SchemaStatus status);
 
     // =============================================================
     //                    SCHEMA MANAGEMENT
@@ -81,4 +90,10 @@ interface ISchemaRegistry {
      */
     function createSchema(SchemaInput calldata schema) external;
 
+    /**
+     * Changes the status of a schema to deprecated
+     * @param schemaId Schema identifier
+     * @param channelName The name of the channel to which the schema belongs
+     */
+    function deprecateSchema(bytes32 schemaId, bytes32 channelName) external; 
 }
