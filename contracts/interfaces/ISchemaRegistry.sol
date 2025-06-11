@@ -31,7 +31,7 @@ interface ISchemaRegistry {
     }
 
 
-
+    // Schema struct
     struct Schema {
         bytes32 id;                    // Schema unique identifier
         string name;                   // Schema name
@@ -76,7 +76,7 @@ interface ISchemaRegistry {
     // =============================================================
 
     /**
-     * @notice Creates a new schema
+     * Creates a new schema
      * @param schema Schema data to create
      */
     function createSchema(SchemaInput calldata schema) external;
