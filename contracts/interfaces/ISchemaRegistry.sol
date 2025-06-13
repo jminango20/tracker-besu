@@ -25,6 +25,7 @@ interface ISchemaRegistry {
     struct SchemaInput {
         bytes32 id;                    // Schema unique identifier
         string name;                   // Schema name
+        uint256 version;               // Schema version
         bytes32 dataHash;              // Hash of the complete JSON schema (stored off-chain)
         bytes32 channelName;           // Virtual channel name
         string description;            // Schema description
@@ -62,6 +63,15 @@ interface ISchemaRegistry {
         bytes32 indexed schemaId, 
         address indexed owner, 
         bytes32 indexed channelName, 
+        uint256 timestamp,
+        uint256 deprecatedVersions
+    );
+
+    event SchemaInactivated(
+        bytes32 indexed schemaId,
+        uint256 indexed version,
+        address indexed owner,
+        bytes32 channelName,
         uint256 timestamp
     );
 
@@ -69,9 +79,10 @@ interface ISchemaRegistry {
     //                        CUSTOM ERRORS
     // =============================================================
     
-    error SchemaAlreadyExistsInChannel(bytes32 channelName, bytes32 schemaId);
+    error SchemaAlreadyExistsInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
     error SchemaHasNoVersions(bytes32 schemaId, bytes32 channelName); 
     error InvalidSchemaId();
+    error InvalidVersion();
     error InvalidSchemaName();
     error InvalidDataHash();
     error DescriptionTooLong();
@@ -79,6 +90,8 @@ interface ISchemaRegistry {
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId);
     error NotSchemaOwner(bytes32 schemaId, address owner);
     error SchemaNotActive(bytes32 schemaId, SchemaStatus status);
+    error SchemaVersionNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
+    error SchemaNotActiveOrDeprecated(bytes32 schemaId, SchemaStatus status);
 
     // =============================================================
     //                    SCHEMA MANAGEMENT
@@ -96,4 +109,13 @@ interface ISchemaRegistry {
      * @param channelName The name of the channel to which the schema belongs
      */
     function deprecateSchema(bytes32 schemaId, bytes32 channelName) external; 
+
+    /**
+     * Chhanges the status of a schema to inactive
+     * @param schemaId Schema identifier
+     * @param version Schema version
+     * @param channelName The name of the channel to which the schema belongs
+     */
+    function inactivateSchema(bytes32 schemaId, uint256 version, bytes32 channelName) external; 
+
 }

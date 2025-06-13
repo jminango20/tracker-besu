@@ -57,8 +57,7 @@ COMO rede blockchain QUERO validar os dados de um esquema PARA adicioná-lo na l
 COMO rede blockchain QUERO atualizar a situação de um esquema PARA descontinuado.
 
 ### Regras de Negócio
-Como rede blockchain quero atualizar a situação de um esquema para descontinuado, motivo pelo qual como parâmetro de entrada deve ser informado o identificador do esquema
-e o nome do canal onde o esquema está armazenado.
+Como rede blockchain quero atualizar a situação de um esquema para descontinuado, motivo pelo qual como parâmetro de entrada deve ser informado o identificador do esquema e o nome do canal onde o esquema está armazenado.
 
 #### Cumprimento das Regras de Negócio
 - **Permissões:** `onlyChannelMember(channelName)` - garante que apenas membros autorizados do canal podem deprecar schemas.
@@ -75,3 +74,25 @@ e o nome do canal onde o esquema está armazenado.
 - Dependências: Verificar se outros schemas ou processos dependem deste schema.
 - Versionamento: Avaliar impacto em outras versões do mesmo schema (se existirem).
 - Reversibilidade: Considerar se schemas depreciados podem voltar a ser ativos ou se é operação irreversível.
+- Nota: Quando descontinuo um schema, todas as versões desse schema também são descontinuadas.
+
+***
+## `inactivateSchema`
+### Descrição
+COMO rede blockchain QUERO atualizar a situação de um esquema PARA inativo.
+
+### Regras de Negócio
+Como rede blockchain quero atualizar a situação de um esquema para inativo, motivo pelo qual como parâmetro de entrada deve ser informado o identificador do esquema, a
+versão e o nome do canal onde o esquema está armazenado.
+
+#### Cumprimento das Regras de Negócio
+
+- **Permissões:** `onlyChannelMember(channelName)` - garante que apenas membros autorizados do canal podem inativar schemas.
+- **Validação de canal:** `validChannelName(channelName)` - valida se o canal é válido.
+- **Propriedade do schema:** `schema.owner != _msgSender()` - garante que apenas o proprietário original pode inativar o schema.
+- **Parâmetros obrigatórios:** Validações de `schemaId` (não pode ser zero), `version` (não pode ser zero) e `channelName` (validado por modifiers).
+- **Existência e versão:** `_schemaExistsByChannelName[channelName][schemaId][version]` - verifica se a versão específica existe no canal.
+- **Status válido:** `schema.status != SchemaStatus.ACTIVE && schema.status != SchemaStatus.DEPRECATED` - permite inativação apenas de schemas ativos ou depreciados.
+- **Atualização de situação:** `schema.status = SchemaStatus.INACTIVE` - muda situação para inativo.
+- **Timestamp:** `schema.updatedAt = block.timestamp` - registro automático da transação.
+- **Tipo da transação:** `SchemaInactivated` event - representa o tipo da operação na rede.

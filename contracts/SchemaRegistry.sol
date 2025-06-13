@@ -22,15 +22,15 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
 
     /**
      * Mapping to store schemasId by channel name
-     * @dev channelName => schemaId => Schema
+     * @dev channelName => schemaId => version => Schema
      */
-    mapping(bytes32 => mapping(bytes32 => Schema)) private _schemasByChannelName;
+    mapping(bytes32 => mapping(bytes32 => mapping(uint256 => Schema))) private _schemasByChannelName;
 
     /**
      * Mapping to track schemaId existence by channel name
-     * @dev channelName => schemaId => exists
+     * @dev channelName => schemaId => version => exists
      */
-    mapping(bytes32 => mapping(bytes32 => bool)) private _schemaExistsByChannelName;
+    mapping(bytes32 => mapping(bytes32 => mapping(uint256 => bool))) private _schemaExistsByChannelName;
 
     /**
      * Mapping for schema count per channel
@@ -51,12 +51,6 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
     mapping(address => mapping(bytes32 => uint256)) private _ownerSchemaCount;
 
     /**
-     * Mapping for schema versions by name and channel
-     * @dev channelName => schemaId => version 
-     */
-    mapping(bytes32 => mapping(bytes32 => uint256)) private _schemaVersions;
-
-    /**
      * Mapping for latest version by name and channel
      * @dev channelName => schemaId => version 
      */
@@ -64,9 +58,15 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
 
     /**
      * Mapping for active schemas by channel
-     * @dev channelName => schemaId => bool
+     * @dev channelName => schemaId => version => isActive
      */
-    mapping(bytes32 => mapping(bytes32 => bool)) private _isActiveSchemaIdByChannel;
+    mapping(bytes32 => mapping(bytes32 => mapping(uint256 => bool))) private _isActiveSchemaIdByVersionAndChannel;
+
+    /**
+     * Mapping to track active version per schema 
+     * @dev channelName => schemaId => activeVersion
+     */
+    mapping(bytes32 => mapping(bytes32 => uint256)) private _activeVersions;
 
     /**
      * Mapping for active schema count per channel
@@ -109,15 +109,15 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
         if (bytes(schemaInput.description).length > MAX_STRING_LENGTH) revert DescriptionTooLong();
 
         
-        if (_schemaExistsByChannelName[schemaInput.channelName][schemaInput.id]) {
-            revert SchemaAlreadyExistsInChannel(schemaInput.channelName, schemaInput.id);   
+        if (_schemaExistsByChannelName[schemaInput.channelName][schemaInput.id][schemaInput.version]) {
+            revert SchemaAlreadyExistsInChannel(schemaInput.channelName, schemaInput.id, schemaInput.version);   
         }
         
         // Create schema
         Schema memory newSchema = Schema({
             id: schemaInput.id,
             name: schemaInput.name,
-            version: 1,
+            version: schemaInput.version,
             dataHash: schemaInput.dataHash,
             owner: _msgSender(),
             channelName: schemaInput.channelName,
@@ -129,11 +129,10 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
 
 
         // Store updates
-        _schemasByChannelName[schemaInput.channelName][schemaInput.id] = newSchema;
-        _schemaExistsByChannelName[schemaInput.channelName][schemaInput.id] = true;
-        _schemaVersions[schemaInput.channelName][schemaInput.id] = 1;
-        _latestVersions[schemaInput.channelName][schemaInput.id] = 1;
-        _isActiveSchemaIdByChannel[schemaInput.channelName][schemaInput.id] = true;
+        _schemasByChannelName[schemaInput.channelName][schemaInput.id][schemaInput.version] = newSchema;
+        _schemaExistsByChannelName[schemaInput.channelName][schemaInput.id][schemaInput.version] = true;
+        _latestVersions[schemaInput.channelName][schemaInput.id] = schemaInput.version;
+        _isActiveSchemaIdByVersionAndChannel[schemaInput.channelName][schemaInput.id][schemaInput.version] = true;
 
         // Owner tracking
         uint256 ownerIndex = _ownerSchemaCount[_msgSender()][schemaInput.channelName];
@@ -166,33 +165,92 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
     {
         if (schemaId == bytes32(0)) revert InvalidSchemaId();
 
-        if (!_schemaExistsByChannelName[channelName][schemaId]) {
+        uint256 latestVersion = _latestVersions[channelName][schemaId];
+        if (latestVersion == 0) {
             revert SchemaNotFoundInChannel(channelName, schemaId);
         }
 
-        Schema storage schema = _schemasByChannelName[channelName][schemaId];
-
-        if (schema.owner != _msgSender()) {
+        // Verify owner
+        Schema storage firstSchema = _schemasByChannelName[channelName][schemaId][1];
+        if (firstSchema.owner != _msgSender()) {
             revert NotSchemaOwner(schemaId, _msgSender());
         }
 
-        if (schema.status != SchemaStatus.ACTIVE) {
-            revert SchemaNotActive(schemaId, schema.status);
+        uint256 deprecatedCount = 0;
+
+        // Deprecate all versions of the schema
+        for (uint256 version = 1; version <= latestVersion; version++) {
+            if (_schemaExistsByChannelName[channelName][schemaId][version]) {
+                Schema storage schema = _schemasByChannelName[channelName][schemaId][version];
+                
+                if (schema.status == SchemaStatus.ACTIVE) {
+                    schema.status = SchemaStatus.DEPRECATED;
+                    schema.updatedAt = block.timestamp;
+                    deprecatedCount++;
+                }
+            }
         }
 
-        schema.status = SchemaStatus.DEPRECATED;
-        schema.updatedAt = block.timestamp;
+        uint256 activeVersion = _activeVersions[channelName][schemaId];
+        if (activeVersion != 0) {
+            _activeVersions[channelName][schemaId] = 0; // Sem versão ativa
 
-        _isActiveSchemaIdByChannel[channelName][schemaId] = false;
-
-        unchecked {
-            _activeSchemaCount[channelName]--;
+            unchecked {
+                _activeSchemaCount[channelName]--;
+            }
         }
 
         emit SchemaDeprecated(
-            schemaId, 
-            schema.owner, 
-            channelName, 
+            schemaId,
+            _msgSender(),
+            channelName,
+            block.timestamp,
+            deprecatedCount  
+        );
+    }
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function inactivateSchema(bytes32 schemaId, uint256 version, bytes32 channelName) 
+        external 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+    {
+        if (schemaId == bytes32(0)) revert InvalidSchemaId();
+        if (version == 0) revert InvalidVersion();
+
+        if (!_schemaExistsByChannelName[channelName][schemaId][version]) {
+            revert SchemaVersionNotFoundInChannel(channelName, schemaId, version);
+        }
+
+        Schema storage schema = _schemasByChannelName[channelName][schemaId][version];
+
+        if (schema.owner != _msgSender()) {
+           revert NotSchemaOwner(schemaId, _msgSender());
+        }
+
+        if (schema.status != SchemaStatus.ACTIVE && schema.status != SchemaStatus.DEPRECATED) {
+            revert SchemaNotActiveOrDeprecated(schemaId, schema.status);
+        }
+
+        schema.status = SchemaStatus.INACTIVE;
+        schema.updatedAt = block.timestamp;
+
+        // If the schema was active, update the active version
+        if (_activeVersions[channelName][schemaId] == version) {
+            _activeVersions[channelName][schemaId] = 0;
+            
+            unchecked {
+                _activeSchemaCount[channelName]--;
+            }
+        }
+
+        emit SchemaInactivated(
+            schemaId,
+            version,
+            _msgSender(),
+            channelName,
             block.timestamp
         );
     }
