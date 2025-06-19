@@ -6,7 +6,8 @@ import {ISchemaRegistry} from "./interfaces/ISchemaRegistry.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {
     SCHEMA_ADMIN_ROLE,
-    MAX_STRING_LENGTH
+    MAX_STRING_LENGTH,
+    MAX_PAGE_SIZE
     } from "./lib/Constants.sol";
 
 /**
@@ -254,6 +255,177 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
             block.timestamp
         );
     }
+
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function updateSchema(SchemaUpdateInput calldata schemaUpdateInput) 
+        external 
+        validChannelName(schemaUpdateInput.channelName)
+        onlyChannelMember(schemaUpdateInput.channelName)
+    {
+        if (schemaUpdateInput.id == bytes32(0)) revert InvalidSchemaId();
+        if (schemaUpdateInput.newVersion == 0) revert InvalidVersion();
+        if (schemaUpdateInput.newDataHash == bytes32(0)) revert InvalidDataHash();
+        if (bytes(schemaUpdateInput.description).length > MAX_STRING_LENGTH) revert DescriptionTooLong();
+
+        uint256 latestVersion = _latestVersions[schemaUpdateInput.channelName][schemaUpdateInput.id];
+        if (latestVersion == 0) {
+            revert SchemaNotFoundInChannel(schemaUpdateInput.channelName, schemaUpdateInput.id);
+        }
+
+        uint256 activeVersion = _activeVersions[schemaUpdateInput.channelName][schemaUpdateInput.id];
+        if (activeVersion == 0) {
+            revert NoActiveSchemaVersion(schemaUpdateInput.id);
+        }
+
+        //Get the current schema
+        Schema storage currentSchema = _schemasByChannelName[schemaUpdateInput.channelName][schemaUpdateInput.id][activeVersion];
+
+        if (currentSchema.owner != _msgSender()) {
+            revert NotSchemaOwner(schemaUpdateInput.id, _msgSender());
+        }
+
+        if (currentSchema.status != SchemaStatus.ACTIVE) {
+            revert SchemaNotActive(schemaUpdateInput.id, currentSchema.status);
+        }
+
+        // New version must be greater than latest version (numerical validation)
+        if (schemaUpdateInput.newVersion <= latestVersion) {
+            revert InvalidNewVersion(schemaUpdateInput.id, latestVersion, schemaUpdateInput.newVersion);
+        }
+
+        if (_schemaExistsByChannelName[schemaUpdateInput.channelName][schemaUpdateInput.id][schemaUpdateInput.newVersion]) {
+            revert SchemaVersionAlreadyExists(schemaUpdateInput.channelName, schemaUpdateInput.id, schemaUpdateInput.newVersion);
+        }
+
+        uint256 timestamp = block.timestamp;
+
+        // Update the schema
+        currentSchema.status = SchemaStatus.DEPRECATED;
+        currentSchema.updatedAt = timestamp;
+
+        Schema memory newSchema = Schema({
+            id: schemaUpdateInput.id,           
+            name: currentSchema.name,
+            version: schemaUpdateInput.newVersion,
+            dataHash: schemaUpdateInput.newDataHash,
+            owner: _msgSender(),                            
+            channelName: schemaUpdateInput.channelName,
+            status: SchemaStatus.ACTIVE,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            description: schemaUpdateInput.description
+        });
+
+        // Storages Updates
+        _schemasByChannelName[schemaUpdateInput.channelName][schemaUpdateInput.id][schemaUpdateInput.newVersion] = newSchema;
+        _schemaExistsByChannelName[schemaUpdateInput.channelName][schemaUpdateInput.id][schemaUpdateInput.newVersion] = true;
+
+        _latestVersions[schemaUpdateInput.channelName][schemaUpdateInput.id] = schemaUpdateInput.newVersion;
+        _activeVersions[schemaUpdateInput.channelName][schemaUpdateInput.id] = schemaUpdateInput.newVersion;
+
+        emit SchemaUpdated(
+            schemaUpdateInput.id,        
+            activeVersion,                     // Previous version (deprecated)
+            schemaUpdateInput.newVersion,     // New version (active)
+            _msgSender(),                      
+            schemaUpdateInput.channelName,    
+            timestamp                         
+        );
+    }
+
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function getSchema(bytes32 channelName, bytes32 schemaId, uint256 version) 
+        external 
+        view 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+        returns (Schema memory schema) 
+    {
+        if (!_schemaExistsByChannelName[channelName][schemaId][version]) {
+            revert SchemaVersionNotFoundInChannel(channelName, schemaId, version);
+        }
+        
+        return _schemasByChannelName[channelName][schemaId][version];
+    }
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function getActiveSchema(bytes32 channelName, bytes32 schemaId) 
+        external 
+        view 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+        returns (Schema memory schema) 
+    {
+        uint256 activeVersion = _activeVersions[channelName][schemaId];
+        if (activeVersion == 0) {
+            revert NoActiveSchemaVersion(schemaId);
+        }
+        
+        return _schemasByChannelName[channelName][schemaId][activeVersion];
+    }
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function getLatestSchema(bytes32 channelName, bytes32 schemaId) 
+        external 
+        view 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+        returns (Schema memory schema) 
+    {
+        uint256 latestVersion = _latestVersions[channelName][schemaId];
+        if (latestVersion == 0) {
+            revert SchemaNotFoundInChannel(channelName, schemaId);
+        }
+        
+        return _schemasByChannelName[channelName][schemaId][latestVersion];
+    }
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function getSchemaVersions(bytes32 channelName, bytes32 schemaId) 
+        external 
+        view 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+        returns (uint256[] memory versions, Schema[] memory schemas) 
+    {
+        uint256 latestVersion = _latestVersions[channelName][schemaId];
+        if (latestVersion == 0) {
+            revert SchemaNotFoundInChannel(channelName, schemaId);
+        }
+        
+        uint256 existingCount = 0;
+        for (uint256 i = 1; i <= latestVersion; i++) {
+            if (_schemaExistsByChannelName[channelName][schemaId][i]) {
+                existingCount++;
+            }
+        }
+        
+        versions = new uint256[](existingCount);
+        schemas = new Schema[](existingCount);
+        
+        uint256 index = 0;
+        for (uint256 i = 1; i <= latestVersion; i++) {
+            if (_schemaExistsByChannelName[channelName][schemaId][i]) {
+                versions[index] = i;
+                schemas[index] = _schemasByChannelName[channelName][schemaId][i];
+                index++;
+            }
+        }
+    }
+
+
 
     // =============================================================
     //                    INTERNAL FUNCTIONS

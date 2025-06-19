@@ -96,3 +96,50 @@ versão e o nome do canal onde o esquema está armazenado.
 - **Atualização de situação:** `schema.status = SchemaStatus.INACTIVE` - muda situação para inativo.
 - **Timestamp:** `schema.updatedAt = block.timestamp` - registro automático da transação.
 - **Tipo da transação:** `SchemaInactivated` event - representa o tipo da operação na rede.
+
+***
+## `updateSchema`
+### Descrição
+COMO rede blockchain QUERO alterar os dados de um esquema cadastrado na ledger PARA uso em processos e padronização de dados.
+
+### Regras de Negócio
+- O usuário que submeteu a transação na ledger deve possuir permissão para realizar a operação.
+- A organização a qual o usuário pertence deve ser a proprietária do esquema.
+- Sobre os parâmetros de entada: 
+    - Os parâmetros obrigatórios devem ser informados.
+    - A estrutura dos dados não conter erros de sintaxe: 
+        - Para o tipo "XML": deve atender a especificação descrita em [-https://www.w3.org/XML/Schema-].
+        - Para o tipo "JSON": deve atender a especificação descrita em https://json-schema.org/draft/2019-09/json-schema-validation.html.
+- O esquema deve existir cadastrado na ledger com estado atual igual a "ativo"
+- A nova versão deve ser maior que as versões anteriores do esquema (utilizar ordem alfabética para esta validação).
+- Quando atendidas as regras descritas acima.
+    - Atualizar a versão atual do esquema na ledger com os dados descritos abaixo: 
+        - Situação: com o valor "descontinuado".
+        - Tipo da transação: com o valor "updateSchema".
+        - Timestamp da transação.
+    - Adicionar a nova versão do esquema na ledger com os valores recebidos nos parâmetros de entrada e:  
+        - Situação: com o valor "ativo".
+        - Tipo da transação: com o valor "updateSchema".
+        - Timestamp da transação.
+
+#### Cumprimento das Regras de Negócio
+
+- **Permissões:** `onlyChannelMember(schemaUpdateInput.channelName)` - garante que apenas membros autorizados do canal podem atualizar schemas.
+- **Validação de canal:** `validChannelName(schemaUpdateInput.channelName)` - valida se o canal é válido.
+- **Propriedade do schema:** `currentSchema.owner != _msgSender()` - garante que apenas o proprietário original pode atualizar o schema.
+- **Parâmetros obrigatórios:** Validações de `id`, `newVersion`, `newDataHash` e `description` (tamanho máximo).
+- **Estrutura de dados:** `newDataHash` contém hash dos dados JSON/XML validados off-chain antes do submit.
+- **Existência do schema:** `latestVersion == 0` e `activeVersion == 0` - verifica se schema existe e tem versão ativa.
+- **Status ativo:** `currentSchema.status != SchemaStatus.ACTIVE` - só permite atualizar schemas que estão ativos.
+- **Versão sequencial:** `schemaUpdateInput.newVersion <= latestVersion` - nova versão deve ser numericamente maior que a anterior.
+- **Unicidade de versão:** `_schemaExistsByChannelName[channelName][schemaId][newVersion]` - garante que a nova versão não existe.
+- **Deprecar versão atual:** `currentSchema.status = SchemaStatus.DEPRECATED` - marca versão anterior como descontinuada.
+- **Nova versão ativa:** `status: SchemaStatus.ACTIVE` no novo schema - adiciona nova versão como ativa.
+- **Timestamp:** `block.timestamp` - registro automático da transação para ambas operações.
+- **Controle de versões:** Atualiza `_latestVersions` e `_activeVersions` para apontar para nova versão.
+- **Tipo da transação:** `SchemaUpdated` event - representa ambas operações (deprecar + criar) na rede.
+
+##### Adaptações Besu
+- **Validação de sintaxe:** Responsabilidade off-chain antes do hash (limitações de gas).
+- **Versão alfabética → numérica:** Usa validação numérica (`uint256`) ao invés de alfabética.
+- **Operação atômica:** Ambas operações (deprecar + criar) executadas em uma única transação.

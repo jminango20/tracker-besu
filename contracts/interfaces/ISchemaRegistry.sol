@@ -31,6 +31,15 @@ interface ISchemaRegistry {
         string description;            // Schema description
     }
 
+    // Update struct for updating schemas
+    struct SchemaUpdateInput {
+        bytes32 id;                // Schema unique identifier to be updated
+        uint256 newVersion;        // New version number
+        bytes32 newDataHash;       // Updated hash of the complete JSON schema (stored off-chain)
+        bytes32 channelName;       // Virtual channel name
+        string description;        // Updated schema description
+    }
+
 
     // Schema struct
     struct Schema {
@@ -75,6 +84,15 @@ interface ISchemaRegistry {
         uint256 timestamp
     );
 
+    event SchemaUpdated(
+        bytes32 indexed schemaId,
+        uint256 previousVersion,
+        uint256 indexed newVersion,
+        address indexed owner,
+        bytes32 channelName,
+        uint256 timestamp
+    );
+
     // =============================================================
     //                        CUSTOM ERRORS
     // =============================================================
@@ -92,6 +110,9 @@ interface ISchemaRegistry {
     error SchemaNotActive(bytes32 schemaId, SchemaStatus status);
     error SchemaVersionNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
     error SchemaNotActiveOrDeprecated(bytes32 schemaId, SchemaStatus status);
+    error NoActiveSchemaVersion(bytes32 schemaId);
+    error InvalidNewVersion(bytes32 schemaId, uint256 latestVersion, uint256 newVersion);
+    error SchemaVersionAlreadyExists(bytes32 channelName, bytes32 schemaId, uint256 version);
 
     // =============================================================
     //                    SCHEMA MANAGEMENT
@@ -111,11 +132,51 @@ interface ISchemaRegistry {
     function deprecateSchema(bytes32 schemaId, bytes32 channelName) external; 
 
     /**
-     * Chhanges the status of a schema to inactive
+     * Changes the status of a schema to inactive
      * @param schemaId Schema identifier
      * @param version Schema version
      * @param channelName The name of the channel to which the schema belongs
      */
-    function inactivateSchema(bytes32 schemaId, uint256 version, bytes32 channelName) external; 
+    function inactivateSchema(bytes32 schemaId, uint256 version, bytes32 channelName) external;
+
+    /**
+     * Updates a schema 
+     * @param schema Schema data to update
+     */
+    function updateSchema(SchemaUpdateInput calldata schema) external;
+
+    /**
+     * Get a specific schema by ID and version
+     * @param channelName The channel name
+     * @param schemaId The schema ID
+     * @param version The schema version
+     * @return schema The schema data
+     */
+    function getSchema(bytes32 channelName, bytes32 schemaId, uint256 version) external view returns (Schema memory schema);
+
+    /**
+     * Get the active version of a schema
+     * @param channelName The channel name
+     * @param schemaId The schema ID
+     * @return schema The active schema data
+     */
+    function getActiveSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
+
+    /**
+     * Get the latest version of a schema (may not be active)
+     * @param channelName The channel name
+     * @param schemaId The schema ID
+     * @return schema The latest schema data
+     */
+    function getLatestSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
+
+    /**
+     * Get all versions of a specific schema
+     * @param channelName The channel name
+     * @param schemaId The schema ID
+     * @return versions Array of version numbers
+     * @return schemas Array of schema data
+     */
+    function getSchemaVersions(bytes32 channelName, bytes32 schemaId) external view returns (uint256[] memory versions, Schema[] memory schemas);
 
 }
