@@ -5,6 +5,7 @@ import {IAddressDiscovery} from "./interfaces/IAddressDiscovery.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {
+    DEFAULT_ADMIN_ROLE,
     ADDRESS_DISCOVERY_ADMIN_ROLE
     } from "./lib/Constants.sol";
 
@@ -59,13 +60,13 @@ contract AddressDiscovery is Context, IAddressDiscovery, AccessControl {
         
         _addressDiscovery[smartContract] = newAddress;
         
-        emit AddressUpdated(smartContract, oldAddress, newAddress, msg.sender);
+        emit AddressUpdated(smartContract, oldAddress, newAddress, _msgSender());
     }
 
     /**
      * @inheritdoc IAddressDiscovery
      */
-    function getAddress(bytes32 smartContract) 
+    function getContractAddress(bytes32 smartContract) 
         external 
         view 
         returns (address) 

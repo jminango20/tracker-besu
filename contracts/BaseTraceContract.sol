@@ -142,7 +142,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
      * @return The access channel manager contract
      */
     function _getAccessChannelManager() internal view returns (IAccessChannelManager) {
-        return IAccessChannelManager(_addressDiscovery.getAddress(ACCESS_CHANNEL_MANAGER));
+        return IAccessChannelManager(_addressDiscovery.getContractAddress(ACCESS_CHANNEL_MANAGER));
     }
 
     /**

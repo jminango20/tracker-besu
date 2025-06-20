@@ -24,7 +24,7 @@ interface IAddressDiscovery {
      * @param smartContract Name of the smart contract using keccak256
      * @return Address of the smart contract
      */
-    function getAddress(bytes32 smartContract) external view returns (address);
+    function getContractAddress(bytes32 smartContract) external view returns (address);
     
     /**
      * Function to check if a smart contract is registered.
