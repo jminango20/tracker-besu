@@ -305,3 +305,59 @@ Function to check if multiple members are part of a channel.
 | ---- | ---- | ----------- |
 | results | bool[] | Array of booleans indicating if each member is a part of the channel |
 
+### addChannelAdmin
+
+```solidity
+function addChannelAdmin(address newChannelAdmin) external
+```
+
+Function to add a new channel admin.
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| newChannelAdmin | address | Address of the new channel admin |
+
+### removeChannelAdmin
+
+```solidity
+function removeChannelAdmin(address addressChannelAdmin) external
+```
+
+Function to remove a channel admin.
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| addressChannelAdmin | address | Address of channel admin to remove |
+
+### addChannelAuthority
+
+```solidity
+function addChannelAuthority(address newChannelAuthority) external
+```
+
+Function to add a new channel authority.
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| newChannelAuthority | address | Address of the new channel authority |
+
+### removeChannelAuthority
+
+```solidity
+function removeChannelAuthority(address addressChannelAuthority) external
+```
+
+Function to remove a channel authority.
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| addressChannelAuthority | address | Address of channel authority to remove |
+

@@ -19,10 +19,10 @@ Function to register/update a new smart contract address.
 | smartContract | bytes32 | Name of the smart contract using keccak256 |
 | newAddress | address | Address of the smart contract |
 
-### getAddress
+### getContractAddress
 
 ```solidity
-function getAddress(bytes32 smartContract) external view returns (address)
+function getContractAddress(bytes32 smartContract) external view returns (address)
 ```
 
 Function to get the address of a smart contract.

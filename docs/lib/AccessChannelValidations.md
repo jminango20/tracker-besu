@@ -88,6 +88,12 @@ error InvalidPageNumber(uint256 page)
 error InvalidPageSize(uint256 pageSize)
 ```
 
+### InvalidAddress
+
+```solidity
+error InvalidAddress(address addr)
+```
+
 ### validateAddress
 
 ```solidity
