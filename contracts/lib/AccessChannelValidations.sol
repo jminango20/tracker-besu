@@ -25,6 +25,7 @@ library AccessChannelValidations {
     error BatchSizeExceeded(uint256 provided, uint256 maximum);
     error InvalidPageNumber(uint256 page);
     error InvalidPageSize(uint256 pageSize);
+    error InvalidAddress(address addr);
     
     
     // =============================================================

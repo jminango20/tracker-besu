@@ -436,6 +436,46 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
     }
 
     // =============================================================
+    //                    ACCESS CONTROL HELPERS
+    // =============================================================
+
+    /**
+     * Function to add a new channel admin.
+     * @param newChannelAdmin Address of the new channel admin
+     */
+    function addChannelAdmin(address newChannelAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newChannelAdmin == address(0)) revert AccessChannelValidations.InvalidAddress(newChannelAdmin);
+        _grantRole(CHANNEL_ADMIN_ROLE, newChannelAdmin);
+    }
+
+    /**
+     * Function to remove a channel admin.
+     * @param addressChannelAdmin Address of channel admin to remove
+     */
+    function removeChannelAdmin(address addressChannelAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (addressChannelAdmin == address(0)) revert AccessChannelValidations.InvalidAddress(addressChannelAdmin);
+        _revokeRole(CHANNEL_ADMIN_ROLE, addressChannelAdmin);
+    }
+
+    /**
+     * Function to add a new channel authority.
+     * @param newChannelAuthority Address of the new channel authority
+     */
+    function addChannelAuthority(address newChannelAuthority) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newChannelAuthority == address(0)) revert AccessChannelValidations.InvalidAddress(newChannelAuthority);
+        _grantRole(CHANNEL_AUTHORITY_ROLE, newChannelAuthority);
+    }
+
+    /**
+     * Function to remove a channel authority.
+     * @param addressChannelAuthority Address of channel authority to remove
+     */
+    function removeChannelAuthority(address addressChannelAuthority) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (addressChannelAuthority == address(0)) revert AccessChannelValidations.InvalidAddress(addressChannelAuthority);
+        _revokeRole(CHANNEL_AUTHORITY_ROLE, addressChannelAuthority);
+    }
+
+    // =============================================================
     //                    INTERNAL FUNCTIONS
     // =============================================================
 
