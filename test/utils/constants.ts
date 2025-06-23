@@ -31,3 +31,11 @@ export const NON_EXISTENT_CHANNEL = hre.ethers.keccak256(hre.ethers.toUtf8Bytes(
  * SCHEMA REGISTRY 
  */
 export const SCHEMA_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("SCHEMA_ADMIN_ROLE"));
+
+// Define test schema data
+export const SCHEMA_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("SCHEMA_1"));
+export const SCHEMA_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("SCHEMA_2"));
+export const NON_EXISTENT_SCHEMA = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NON_EXISTENT"));
+
+export const DATA_HASH_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("data_hash_1"));
+export const DATA_HASH_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("data_hash_2"));

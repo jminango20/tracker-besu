@@ -9,8 +9,5 @@ export async function deployAddressDiscovery() {
 
     await addressDiscovery.waitForDeployment();
 
-    return {
-      addressDiscovery,
-      accounts
-    };
+    return addressDiscovery;
 }
