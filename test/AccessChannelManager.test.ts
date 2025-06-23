@@ -3,12 +3,19 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
 import { deployAccessChannelManager } from "./fixture/deployAccessChannelManager";
+import { 
+  DEFAULT_ADMIN_ROLE, 
+  CHANNEL_AUTHORITY_ROLE, 
+  CHANNEL_ADMIN_ROLE,
+  CHANNEL_1,
+  CHANNEL_2 
+} from "./utils/index";
 
 describe("AccessChannelManager test", function () {
 
   describe("Deployment", function () {
     it("Should set the correct roles for deployer", async function () {
-      const { accessChannelManager, deployer, DEFAULT_ADMIN_ROLE, CHANNEL_AUTHORITY_ROLE, CHANNEL_ADMIN_ROLE } = 
+      const { accessChannelManager, deployer } = 
         await loadFixture(deployAccessChannelManager);
 
       expect(await accessChannelManager.hasRole(DEFAULT_ADMIN_ROLE, deployer.address)).to.be.true;
@@ -27,7 +34,7 @@ describe("AccessChannelManager test", function () {
   describe("Channel Management", function () {
     describe("createChannel", function () {
       it("Should allow channel authority to create channel", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await expect(accessChannelManager.connect(deployer).createChannel(CHANNEL_1))
@@ -41,7 +48,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should emit ChannelCreated event", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await expect(accessChannelManager.connect(deployer).createChannel(CHANNEL_1))
@@ -50,7 +57,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if channel already exists", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -61,7 +68,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if caller doesn't have authority role", async function () {
-        const { accessChannelManager, user, CHANNEL_1, CHANNEL_AUTHORITY_ROLE } = 
+        const { accessChannelManager, user } = 
           await loadFixture(deployAccessChannelManager);
 
         await expect(accessChannelManager.connect(user).createChannel(CHANNEL_1))
@@ -70,7 +77,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should increment channel count", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1, CHANNEL_2 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         expect(await accessChannelManager.getChannelCount()).to.equal(0);
@@ -85,7 +92,7 @@ describe("AccessChannelManager test", function () {
 
     describe("activateChannel", function () {
       it("Should allow channel authority to activate deactivated channel", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         // Create and deactivate channel
@@ -100,7 +107,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should emit ChannelActivated event", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -112,7 +119,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if channel is already active", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -125,7 +132,7 @@ describe("AccessChannelManager test", function () {
 
     describe("desactivateChannel", function () {
       it("Should allow channel authority to deactivate channel", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -138,7 +145,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should emit ChannelDeactivated event", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -153,7 +160,7 @@ describe("AccessChannelManager test", function () {
   describe("Member Management", function () {
     describe("addChannelMember", function () {
       it("Should allow channel admin to add member", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -168,7 +175,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should emit ChannelMemberAdded event", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -179,7 +186,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if member is zero address", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -190,7 +197,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if member is channel creator", async function () {
-        const { accessChannelManager, deployer, CHANNEL_1 } = 
+        const { accessChannelManager, deployer } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -201,7 +208,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if member already in channel", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -213,7 +220,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if caller doesn't have admin role", async function () {
-        const { accessChannelManager, deployer, user, member1, CHANNEL_1, CHANNEL_ADMIN_ROLE } = 
+        const { accessChannelManager, deployer, user, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -226,7 +233,7 @@ describe("AccessChannelManager test", function () {
 
     describe("removeChannelMember", function () {
       it("Should allow channel admin to remove member", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -242,7 +249,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should emit ChannelMemberRemoved event", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -254,7 +261,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert if member not in channel", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -267,7 +274,7 @@ describe("AccessChannelManager test", function () {
 
     describe("addChannelMembers - batch", function () {
       it("Should allow adding multiple members", async function () {
-        const { accessChannelManager, deployer, member1, member2, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1, member2 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -283,7 +290,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should emit ChannelMembersAdded event", async function () {
-        const { accessChannelManager, deployer, member1, member2, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1, member2 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -294,7 +301,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should skip invalid addresses in batch", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -314,7 +321,7 @@ describe("AccessChannelManager test", function () {
   describe("View Functions", function () {
     describe("isChannelMember", function () {
       it("Should return true for channel member", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -324,7 +331,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should return false for non-member", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -333,7 +340,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should revert for inactive channel", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -347,7 +354,7 @@ describe("AccessChannelManager test", function () {
 
     describe("getChannelInfo", function () {
       it("Should return correct channel information", async function () {
-        const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1 } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -363,7 +370,7 @@ describe("AccessChannelManager test", function () {
       });
 
       it("Should return false for non-existent channel", async function () {
-        const { accessChannelManager, CHANNEL_1 } = 
+        const { accessChannelManager } = 
           await loadFixture(deployAccessChannelManager);
 
         const channelInfo = await accessChannelManager.getChannelInfo(CHANNEL_1);
@@ -378,7 +385,7 @@ describe("AccessChannelManager test", function () {
 
     describe("areChannelMembers", function () {
       it("Should return correct membership status for multiple addresses", async function () {
-        const { accessChannelManager, deployer, member1, member2, user, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, member1, member2, user } = 
           await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -395,7 +402,7 @@ describe("AccessChannelManager test", function () {
 
   describe("Edge Cases", function () {
     it("Should handle channel deactivation and member operations", async function () {
-      const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+      const { accessChannelManager, deployer, member1 } = 
         await loadFixture(deployAccessChannelManager);
 
       await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -414,7 +421,7 @@ describe("AccessChannelManager test", function () {
     });
 
     it("Should maintain member count consistency", async function () {
-      const { accessChannelManager, deployer, member1, member2, CHANNEL_1 } = 
+      const { accessChannelManager, deployer, member1, member2 } = 
         await loadFixture(deployAccessChannelManager);
 
       await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -438,7 +445,7 @@ describe("AccessChannelManager test", function () {
   describe("Pagination Functions", function () {
     describe("getChannelMembersPaginated", function () {
         it("Should return paginated members correctly", async function () {
-            const { accessChannelManager, deployer, member1, member2, member3, CHANNEL_1 } = 
+            const { accessChannelManager, deployer, member1, member2, member3 } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -453,7 +460,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should return empty array for channel with no members", async function () {
-            const { accessChannelManager, deployer, CHANNEL_1 } = 
+            const { accessChannelManager, deployer } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -467,7 +474,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should handle last page correctly", async function () {
-            const { accessChannelManager, deployer, member1, member2, member3, CHANNEL_1 } = 
+            const { accessChannelManager, deployer, member1, member2, member3 } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -482,7 +489,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should revert for invalid page number", async function () {
-            const { accessChannelManager, deployer, CHANNEL_1 } = 
+            const { accessChannelManager, deployer } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -493,7 +500,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should revert for invalid page size", async function () {
-            const { accessChannelManager, deployer, CHANNEL_1 } = 
+            const { accessChannelManager, deployer } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -504,7 +511,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should return empty for page beyond total pages", async function () {
-            const { accessChannelManager, deployer, member1, CHANNEL_1 } = 
+            const { accessChannelManager, deployer, member1 } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -521,7 +528,7 @@ describe("AccessChannelManager test", function () {
 
     describe("getAllChannelsPaginated", function () {
         it("Should return paginated channels correctly", async function () {
-            const { accessChannelManager, deployer, CHANNEL_1, CHANNEL_2 } = 
+            const { accessChannelManager, deployer } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -548,7 +555,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should handle single page with all channels", async function () {
-            const { accessChannelManager, deployer, CHANNEL_1, CHANNEL_2 } = 
+            const { accessChannelManager, deployer } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -583,7 +590,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should return empty for page beyond total pages", async function () {
-            const { accessChannelManager, deployer, CHANNEL_1 } = 
+            const { accessChannelManager, deployer } = 
                 await loadFixture(deployAccessChannelManager);
 
             await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -601,7 +608,7 @@ describe("AccessChannelManager test", function () {
   describe("Access Control Helpers", function () {
     describe("addChannelAdmin", function () {
         it("Should allow default admin to add new channel admin", async function () {
-        const { accessChannelManager, deployer, user, CHANNEL_ADMIN_ROLE } = 
+        const { accessChannelManager, deployer, user } = 
             await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).addChannelAdmin(user.address);
@@ -619,7 +626,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should revert if caller is not default admin", async function () {
-        const { accessChannelManager, user, member1, DEFAULT_ADMIN_ROLE } = 
+        const { accessChannelManager, user, member1 } = 
             await loadFixture(deployAccessChannelManager);
 
         await expect(accessChannelManager.connect(user).addChannelAdmin(member1.address))
@@ -630,7 +637,7 @@ describe("AccessChannelManager test", function () {
 
     describe("removeChannelAdmin", function () {
         it("Should allow default admin to remove channel admin", async function () {
-        const { accessChannelManager, deployer, user, CHANNEL_ADMIN_ROLE } = 
+        const { accessChannelManager, deployer, user } = 
             await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).addChannelAdmin(user.address);
@@ -652,7 +659,7 @@ describe("AccessChannelManager test", function () {
 
     describe("addChannelAuthority", function () {
         it("Should allow default admin to add new channel authority", async function () {
-        const { accessChannelManager, deployer, user, CHANNEL_AUTHORITY_ROLE } = 
+        const { accessChannelManager, deployer, user } = 
             await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).addChannelAuthority(user.address);
@@ -672,7 +679,7 @@ describe("AccessChannelManager test", function () {
 
     describe("removeChannelAuthority", function () {
         it("Should allow default admin to remove channel authority", async function () {
-        const { accessChannelManager, deployer, user, CHANNEL_AUTHORITY_ROLE } = 
+        const { accessChannelManager, deployer, user } = 
             await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).addChannelAuthority(user.address);
@@ -694,7 +701,7 @@ describe("AccessChannelManager test", function () {
 
     describe("Role Integration", function () {
         it("Should allow newly added admin to manage members", async function () {
-        const { accessChannelManager, deployer, user, member1, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, user, member1 } = 
             await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
@@ -705,7 +712,7 @@ describe("AccessChannelManager test", function () {
         });
 
         it("Should allow newly added authority to create channels", async function () {
-        const { accessChannelManager, deployer, user, CHANNEL_1 } = 
+        const { accessChannelManager, deployer, user } = 
             await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).addChannelAuthority(user.address);
@@ -715,5 +722,4 @@ describe("AccessChannelManager test", function () {
         });
     });
   });
-
 });
