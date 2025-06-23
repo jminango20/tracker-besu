@@ -15,7 +15,7 @@ import {
  * @notice Contract for managing data schemas in the trace system
  * @dev Inherits from BaseTraceContract for common functionality
  */
-contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
+contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
 
     // =============================================================
     //                        STORAGE
@@ -134,6 +134,7 @@ contract SchemaRegistry is Context,BaseTraceContract, ISchemaRegistry {
         _schemaExistsByChannelName[schemaInput.channelName][schemaInput.id][schemaInput.version] = true;
         _latestVersions[schemaInput.channelName][schemaInput.id] = schemaInput.version;
         _isActiveSchemaIdByVersionAndChannel[schemaInput.channelName][schemaInput.id][schemaInput.version] = true;
+        _activeVersions[schemaInput.channelName][schemaInput.id] = schemaInput.version;
 
         // Owner tracking
         uint256 ownerIndex = _ownerSchemaCount[_msgSender()][schemaInput.channelName];

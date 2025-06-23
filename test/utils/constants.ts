@@ -4,6 +4,9 @@ export const DEFAULT_ADMIN_ROLE: string = "0x00000000000000000000000000000000000
 
 export const ADDRESS_DISCOVERY_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ADDRESS_DISCOVERY_ADMIN_ROLE"));
 
+/**
+ * ADDRESS DISCOVERY
+ */
 // Mock for adddress discovery
 export const CONTRACT_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONTRACT_1"));
 export const CONTRACT_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONTRACT_2"));
@@ -12,6 +15,9 @@ export const NON_EXISTENT_CONTRACT = hre.ethers.keccak256(hre.ethers.toUtf8Bytes
 export const contractAddress1 = hre.ethers.Wallet.createRandom().address;
 export const contractAddress2 = hre.ethers.Wallet.createRandom().address;
 
+/**
+ * ACCESS CHANNEL MANAGER
+ */
 // For Access Channel Manager tests
 export const CHANNEL_AUTHORITY_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CHANNEL_AUTHORITY_ROLE"));
 export const CHANNEL_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CHANNEL_ADMIN_ROLE"));
@@ -20,3 +26,8 @@ export const CHANNEL_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("C
 export const CHANNEL_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CHANNEL_1"));
 export const CHANNEL_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CHANNEL_2"));
 export const NON_EXISTENT_CHANNEL = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NON_EXISTENT"));
+
+/**
+ * SCHEMA REGISTRY 
+ */
+export const SCHEMA_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("SCHEMA_ADMIN_ROLE"));

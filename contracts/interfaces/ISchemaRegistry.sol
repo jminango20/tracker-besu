@@ -40,7 +40,6 @@ interface ISchemaRegistry {
         string description;        // Updated schema description
     }
 
-
     // Schema struct
     struct Schema {
         bytes32 id;                    // Schema unique identifier
