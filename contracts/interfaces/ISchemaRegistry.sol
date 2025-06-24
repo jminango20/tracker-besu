@@ -153,7 +153,7 @@ interface ISchemaRegistry {
      * @param version The schema version
      * @return schema The schema data
      */
-    function getSchema(bytes32 channelName, bytes32 schemaId, uint256 version) external view returns (Schema memory schema);
+    function getSchemaByVersion(bytes32 channelName, bytes32 schemaId, uint256 version) external view returns (Schema memory schema);
 
     /**
      * Get the active version of a schema
@@ -179,5 +179,27 @@ interface ISchemaRegistry {
      * @return schemas Array of schema data
      */
     function getSchemaVersions(bytes32 channelName, bytes32 schemaId) external view returns (uint256[] memory versions, Schema[] memory schemas);
+
+    /**
+     * Return the current schema (active or latest)
+     * @param channelName The channel name
+     * @param schemaId The schema ID
+     * @return schema The schema data
+     */
+    function getSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory);
+
+    /**
+     * Returns all schema versions with specified status
+     * @param channelName The channel name
+     * @param schemaId The schema ID
+     * @param status The schema status
+     * @return schemas Array of schema data
+     */
+    function getSchemasByStatus(
+        bytes32 channelName, 
+        bytes32 schemaId, 
+        SchemaStatus status
+    ) external view returns (Schema[] memory);
+
 
 }

@@ -373,7 +373,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     /**
      * @inheritdoc ISchemaRegistry
      */
-    function getSchema(bytes32 channelName, bytes32 schemaId, uint256 version) 
+    function getSchemaByVersion(bytes32 channelName, bytes32 schemaId, uint256 version) 
         external 
         view 
         validChannelName(channelName)
@@ -456,6 +456,77 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
                 index++;
             }
         }
+    }
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function getSchema(bytes32 channelName, bytes32 schemaId)
+        external
+        view 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+        returns (Schema memory schema) 
+    {
+        // Try to get active schema first
+        uint256 activeVersion = _activeVersions[channelName][schemaId];
+        if (activeVersion != 0) {
+            return _schemasByChannelName[channelName][schemaId][activeVersion];
+        }
+        
+        // If no active version, get latest
+        uint256 latestVersion = _latestVersions[channelName][schemaId];
+        if (latestVersion == 0) {
+            revert SchemaNotFoundInChannel(channelName, schemaId);
+        }
+        
+        return _schemasByChannelName[channelName][schemaId][latestVersion];
+    }
+
+    /**
+     * @inheritdoc ISchemaRegistry
+     */
+    function getSchemasByStatus(
+        bytes32 channelName, 
+        bytes32 schemaId, 
+        SchemaStatus status
+    ) 
+        external 
+        view 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+        returns (Schema[] memory schemas) 
+    {
+        uint256 latestVersion = _latestVersions[channelName][schemaId];
+        if (latestVersion == 0) {
+            revert SchemaNotFoundInChannel(channelName, schemaId);
+        }
+        
+        // Count schemas with matching status
+        uint256 matchingCount = 0;
+        for (uint256 i = 1; i <= latestVersion; i++) {
+            if (_schemaExistsByChannelName[channelName][schemaId][i]) {
+                Schema storage schema = _schemasByChannelName[channelName][schemaId][i];
+                if (schema.status == status) {
+                    matchingCount++;
+                }
+            }
+        }
+        
+        schemas = new Schema[](matchingCount);
+        uint256 index = 0;
+        
+        for (uint256 i = 1; i <= latestVersion; i++) {
+            if (_schemaExistsByChannelName[channelName][schemaId][i]) {
+                Schema storage schema = _schemasByChannelName[channelName][schemaId][i];
+                if (schema.status == status) {
+                    schemas[index] = schema;
+                    index++;
+                }
+            }
+        }
+        
+        return schemas;
     }
 
 
