@@ -347,6 +347,18 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _latestVersions[schemaUpdateInput.channelName][schemaUpdateInput.id] = schemaUpdateInput.newVersion;
         _activeVersions[schemaUpdateInput.channelName][schemaUpdateInput.id] = schemaUpdateInput.newVersion;
 
+        _isActiveSchemaIdByVersionAndChannel[schemaUpdateInput.channelName][schemaUpdateInput.id][schemaUpdateInput.newVersion] = true;
+        _isActiveSchemaIdByVersionAndChannel[schemaUpdateInput.channelName][schemaUpdateInput.id][activeVersion] = false;
+
+        uint256 ownerIndex = _ownerSchemaCount[_msgSender()][schemaUpdateInput.channelName];
+        _schemasByOwner[_msgSender()][schemaUpdateInput.channelName][ownerIndex] = schemaUpdateInput.id;
+
+        unchecked {
+            _channelSchemaCount[schemaUpdateInput.channelName]++;  // New version = new schema count
+            _ownerSchemaCount[_msgSender()][schemaUpdateInput.channelName]++;  // Owner has one more schema
+            // _activeSchemaCount stays same (1 deprecated, 1 new active)
+        }
+
         emit SchemaUpdated(
             schemaUpdateInput.id,        
             activeVersion,                     // Previous version (deprecated)
