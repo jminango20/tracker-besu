@@ -240,12 +240,23 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
            revert NotSchemaOwner(schemaId, _msgSender());
         }
 
+        if (schema.status == SchemaStatus.INACTIVE) {
+            revert SchemaAlreadyInactive(schemaId, version);
+        }
+
         if (schema.status != SchemaStatus.ACTIVE && schema.status != SchemaStatus.DEPRECATED) {
             revert SchemaNotActiveOrDeprecated(schemaId, schema.status);
         }
 
+        SchemaStatus previousStatus = schema.status;
+
+        // Update schema status
         schema.status = SchemaStatus.INACTIVE;
         schema.updatedAt = block.timestamp;
+
+        if (_isActiveSchemaIdByVersionAndChannel[channelName][schemaId][version]) {
+            _isActiveSchemaIdByVersionAndChannel[channelName][schemaId][version] = false;
+        }
 
         // If the schema was active, update the active version
         if (_activeVersions[channelName][schemaId] == version) {
@@ -259,6 +270,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         emit SchemaInactivated(
             schemaId,
             version,
+            previousStatus,
             _msgSender(),
             channelName,
             block.timestamp

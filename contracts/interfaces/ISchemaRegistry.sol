@@ -78,6 +78,7 @@ interface ISchemaRegistry {
     event SchemaInactivated(
         bytes32 indexed schemaId,
         uint256 indexed version,
+        SchemaStatus status,
         address indexed owner,
         bytes32 channelName,
         uint256 timestamp
@@ -112,6 +113,7 @@ interface ISchemaRegistry {
     error NoActiveSchemaVersion(bytes32 schemaId);
     error InvalidNewVersion(bytes32 schemaId, uint256 latestVersion, uint256 newVersion);
     error SchemaVersionAlreadyExists(bytes32 channelName, bytes32 schemaId, uint256 version);
+    error SchemaAlreadyInactive(bytes32 schemaId, uint256 version);
 
     // =============================================================
     //                    SCHEMA MANAGEMENT
