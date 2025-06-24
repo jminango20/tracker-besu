@@ -850,7 +850,7 @@ describe("SchemaRegistry test", function () {
     });
   });
 
-  describe.only("View Functions", function () {
+  describe("View Functions", function () {
     this.beforeEach(async function () {
       await schemaRegistry.connect(member1).createSchema(schemaInput);
     });
