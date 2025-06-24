@@ -71,7 +71,7 @@ event SchemaDeprecated(bytes32 schemaId, address owner, bytes32 channelName, uin
 ### SchemaInactivated
 
 ```solidity
-event SchemaInactivated(bytes32 schemaId, uint256 version, address owner, bytes32 channelName, uint256 timestamp)
+event SchemaInactivated(bytes32 schemaId, uint256 version, enum ISchemaRegistry.SchemaStatus status, address owner, bytes32 channelName, uint256 timestamp)
 ```
 
 ### SchemaUpdated
@@ -176,6 +176,12 @@ error InvalidNewVersion(bytes32 schemaId, uint256 latestVersion, uint256 newVers
 error SchemaVersionAlreadyExists(bytes32 channelName, bytes32 schemaId, uint256 version)
 ```
 
+### SchemaAlreadyInactive
+
+```solidity
+error SchemaAlreadyInactive(bytes32 schemaId, uint256 version)
+```
+
 ### createSchema
 
 ```solidity
@@ -235,10 +241,10 @@ Updates a schema
 | ---- | ---- | ----------- |
 | schema | struct ISchemaRegistry.SchemaUpdateInput | Schema data to update |
 
-### getSchema
+### getSchemaByVersion
 
 ```solidity
-function getSchema(bytes32 channelName, bytes32 schemaId, uint256 version) external view returns (struct ISchemaRegistry.Schema schema)
+function getSchemaByVersion(bytes32 channelName, bytes32 schemaId, uint256 version) external view returns (struct ISchemaRegistry.Schema schema)
 ```
 
 Get a specific schema by ID and version
@@ -320,4 +326,47 @@ Get all versions of a specific schema
 | ---- | ---- | ----------- |
 | versions | uint256[] | Array of version numbers |
 | schemas | struct ISchemaRegistry.Schema[] | Array of schema data |
+
+### getSchema
+
+```solidity
+function getSchema(bytes32 channelName, bytes32 schemaId) external view returns (struct ISchemaRegistry.Schema)
+```
+
+Return the current schema (active or latest)
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| channelName | bytes32 | The channel name |
+| schemaId | bytes32 | The schema ID |
+
+#### Return Values
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| [0] | struct ISchemaRegistry.Schema | schema The schema data |
+
+### getSchemasByStatus
+
+```solidity
+function getSchemasByStatus(bytes32 channelName, bytes32 schemaId, enum ISchemaRegistry.SchemaStatus status) external view returns (struct ISchemaRegistry.Schema[])
+```
+
+Returns all schema versions with specified status
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| channelName | bytes32 | The channel name |
+| schemaId | bytes32 | The schema ID |
+| status | enum ISchemaRegistry.SchemaStatus | The schema status |
+
+#### Return Values
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| [0] | struct ISchemaRegistry.Schema[] | schemas Array of schema data |
 
