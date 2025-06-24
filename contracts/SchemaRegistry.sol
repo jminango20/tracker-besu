@@ -172,15 +172,24 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
             revert SchemaNotFoundInChannel(channelName, schemaId);
         }
 
+        uint256 activeVersion = _activeVersions[channelName][schemaId];
+        if (activeVersion == 0) {
+            revert NoActiveSchemaVersion(schemaId);
+        }
+
         // Verify owner
-        Schema storage firstSchema = _schemasByChannelName[channelName][schemaId][1];
-        if (firstSchema.owner != _msgSender()) {
+        Schema storage activeSchema = _schemasByChannelName[channelName][schemaId][activeVersion];
+        if (activeSchema.owner != _msgSender()) {
             revert NotSchemaOwner(schemaId, _msgSender());
+        }
+
+        if (activeSchema.status != SchemaStatus.ACTIVE) {
+            revert SchemaNotActive(schemaId, activeSchema.status);
         }
 
         uint256 deprecatedCount = 0;
 
-        // Deprecate all versions of the schema
+        // Deprecate just active versions of the schema
         for (uint256 version = 1; version <= latestVersion; version++) {
             if (_schemaExistsByChannelName[channelName][schemaId][version]) {
                 Schema storage schema = _schemasByChannelName[channelName][schemaId][version];
@@ -189,19 +198,18 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
                     schema.status = SchemaStatus.DEPRECATED;
                     schema.updatedAt = block.timestamp;
                     deprecatedCount++;
+
+                    _isActiveSchemaIdByVersionAndChannel[channelName][schemaId][version] = false;
                 }
             }
         }
 
-        uint256 activeVersion = _activeVersions[channelName][schemaId];
-        if (activeVersion != 0) {
-            _activeVersions[channelName][schemaId] = 0; // Sem versão ativa
+        _activeVersions[channelName][schemaId] = 0;
 
-            unchecked {
-                _activeSchemaCount[channelName]--;
-            }
+         unchecked {
+            _activeSchemaCount[channelName]--;
         }
-
+        
         emit SchemaDeprecated(
             schemaId,
             _msgSender(),
