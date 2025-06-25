@@ -9,7 +9,9 @@
     "lint": "solhint contracts/**/*.sol",
     "coverage": "npx hardhat coverage",
     "contract-size": "hardhat size-contracts",
-    "docs": "npx hardhat docgen"
+    "docs": "npx hardhat docgen",
+    "deploy": "hardhat run scripts/deploy.ts",
+    "deploy:localhost": "hardhat run scripts/deploy.ts --network localhost"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.9",
