@@ -143,3 +143,131 @@ COMO rede blockchain QUERO alterar os dados de um esquema cadastrado na ledger P
 - **Validação de sintaxe:** Responsabilidade off-chain antes do hash (limitações de gas).
 - **Versão alfabética → numérica:** Usa validação numérica (`uint256`) ao invés de alfabética.
 - **Operação atômica:** Ambas operações (deprecar + criar) executadas em uma única transação.
+
+***
+## `getSchemaByVersion`
+### Descrição
+COMO rede blockchain QUERO consultar uma versão específica de um esquema PARA verificar detalhes históricos ou comparar versões.
+
+#### Parâmetros
+
+- `channelName`: Nome do canal onde o schema está armazenado.
+- `schemaId`: Identificador único do schema.
+- `version`: Número da versão específica desejada.
+
+#### Retorno
+
+- `Schema memory`: Estrutura completa do schema na versão solicitada.
+
+#### Validações
+- **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
+- **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Existência**: Verifica se a versão específica existe no canal.
+
+***
+## `getActiveSchema`
+### Descrição
+COMO rede blockchain QUERO consultar o esquema ativo de um identificador PARA usar a versão atual em operações.
+
+#### Parâmetros
+
+- `channelName`: Nome do canal onde o schema está armazenado.
+- `schemaId`: Identificador único do schema.
+
+#### Retorno
+
+- `Schema memory`: Estrutura completa do schema na versão ativa.
+
+#### Validações
+- **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
+- **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Versão ativa**: Verifica se existe uma versão ativa no canal.
+
+***
+## `getLatestSchema`
+### Descrição
+COMO rede blockchain QUERO consultar a última versão de um esquema PARA ter acesso à versão mais recente disponível.
+
+#### Parâmetros
+
+- `channelName`: Nome do canal onde o schema está armazenado.
+- `schemaId`: Identificador único do schema.
+
+#### Retorno
+
+- `Schema memory`: Estrutura completa do schema na última versão.
+
+#### Validações
+- **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
+- **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Existência**: Verifica se o schema existe no canal.
+
+***
+## `getSchemaVersions`
+### Descrição
+COMO rede blockchain QUERO consultar todas as versões de um esquema PARA ter visão completa do histórico evolutivo.
+
+#### Parâmetros
+
+- `channelName`: Nome do canal onde o schema está armazenado.
+- `schemaId`: Identificador único do schema.
+
+#### Retorno
+
+- `uint256[] memory versions`: Array com números de todas as versões existentes.
+- `Schema[] memory schemas`: Array com estruturas completas de todos os schemas.
+
+#### Validações
+- **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
+- **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Existência**: Verifica se o schema existe no canal.
+
+***
+## `getSchema`
+### Descrição
+COMO rede blockchain QUERO consultar um esquema de forma inteligente PARA obter a versão mais adequada (ativa ou última disponível).
+
+#### Parâmetros
+
+- `channelName`: Nome do canal onde o schema está armazenado.
+- `schemaId`: Identificador único do schema.
+
+#### Retorno
+
+- `Schema memory`: Estrutura completa do schema (versão ativa ou última versão).
+
+#### Lógica de Priorização
+
+- **Primeira prioridade**: Retorna versão ativa se existir.
+- **Segunda prioridade**: Retorna última versão se não houver versão ativa.
+
+#### Validações
+- **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
+- **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Existência**: Verifica se o schema existe no canal.
+
+**
+## `getSchemasByStatus`
+### Descrição
+COMO rede blockchain QUERO consultar esquemas filtrados por status PARA análise específica de schemas ativos, depreciados ou inativos.
+
+#### Parâmetros
+
+- `channelName`: Nome do canal onde o schema está armazenado.
+- `schemaId`: Identificador único do schema.
+- `status`: Status desejado (`ACTIVE`, `DEPRECATED`, `INACTIVE`).
+
+#### Retorno
+
+- `Schema[] memory`: Array com todas as versões do schema que possuem o status solicitado.
+
+#### Casos de Uso
+
+- `ACTIVE`: Listar versões ativas para validação.
+- `DEPRECATED`: Consultar versões descontinuadas para auditoria.
+- `INACTIVE`: Verificar versões inativas para análise histórica.
+
+#### Validações
+- **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
+- **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Existência**: Verifica se o schema existe no canal.
