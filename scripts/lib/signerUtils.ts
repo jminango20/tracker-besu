@@ -38,3 +38,14 @@ export async function getAddressDiscoveryAdmin() {
   
   return getDeployer();
 }
+
+export async function getDefaultAdmin() {
+  const defaultAdminPrivateKey = process.env.DEFAULT_ADMIN_PRIVATE_KEY;
+  if (defaultAdminPrivateKey) {
+    const signer = new ethers.Wallet(defaultAdminPrivateKey, ethers.provider);
+    console.log(`Using default admin from private key: ${signer.address}`);
+    return signer;
+  }
+  
+  return getDeployer();
+}
