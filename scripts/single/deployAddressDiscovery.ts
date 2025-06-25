@@ -1,9 +1,9 @@
-import { ethers } from "hardhat";
 import { DeploymentUtils } from "../lib/deploymentUtils";
+import { getDeployer } from "../lib/signerUtils";
 
 async function main() {
-  const [deployer] = await ethers.getSigners();
-  await DeploymentUtils.deployContract("AddressDiscovery", [deployer.address]);
+  const deployer = await getDeployer();
+  await DeploymentUtils.deployContractWithSigner("AddressDiscovery", [deployer.address], deployer);
 }
 
 if (require.main === module) {

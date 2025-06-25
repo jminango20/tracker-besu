@@ -1,9 +1,12 @@
 import { ethers, network } from "hardhat";
 import { DeploymentUtils } from "./lib/deploymentUtils";
+import { getAddressDiscoveryAdmin } from "./lib/signerUtils";
 
 async function main() {
   console.log(` Adding contracts to AddressDiscovery for network: ${network.name}`);
-  
+
+  const adminSigner = await getAddressDiscoveryAdmin();
+
   const deployments = DeploymentUtils.loadDeployments(network.name);
   
   // Get addresses
@@ -16,7 +19,7 @@ async function main() {
   }
   
   // Connect to AddressDiscovery
-  const addressDiscovery = await ethers.getContractAt("AddressDiscovery", addressDiscoveryAddress);
+  const addressDiscovery = await ethers.getContractAt("AddressDiscovery", addressDiscoveryAddress, adminSigner);
   
   console.log("Registering contracts in AddressDiscovery...");
   

@@ -1,7 +1,9 @@
 import { DeploymentUtils } from "../lib/deploymentUtils";
+import { getDeployer } from "../lib/signerUtils";
 
 async function main() {
-  await DeploymentUtils.deployContract("AccessChannelManager");
+  const deployer = await getDeployer();
+  await DeploymentUtils.deployContractWithSigner("AccessChannelManager", [], deployer);
 }
 
 if (require.main === module) {

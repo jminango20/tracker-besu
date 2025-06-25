@@ -2,6 +2,7 @@ import { ethers, network } from "hardhat";
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { DeploymentInfo, NetworkDeployments } from "./types";
+import { Signer } from "ethers";
 
 export class DeploymentUtils {
   private static deploymentsDir = "deployments";
@@ -51,12 +52,19 @@ export class DeploymentUtils {
     contractName: string,
     args: any[] = []
   ): Promise<DeploymentInfo> {
-    console.log(`\n Deploying ${contractName} to network: ${network.name}`);
-    
     const [deployer] = await ethers.getSigners();
-    console.log(`Deployer: ${deployer.address}`);
+    return this.deployContractWithSigner(contractName, args, deployer);
+  }
+
+  public static async deployContractWithSigner(
+    contractName: string,
+    args: any[] = [],
+    signer: Signer
+  ): Promise<DeploymentInfo> {
+    console.log(`\n Deploying ${contractName} to network: ${network.name}`);
+    console.log(`Deployer: ${await signer.getAddress()}`);
     
-    const ContractFactory = await ethers.getContractFactory(contractName);
+    const ContractFactory = await ethers.getContractFactory(contractName, signer);
     const contract = await ContractFactory.deploy(...args);
     
     const deploymentTx = contract.deploymentTransaction();
@@ -79,7 +87,7 @@ export class DeploymentUtils {
     const deploymentInfo: DeploymentInfo = {
       contractName,
       address: contractAddress,
-      deployer: deployer.address,
+      deployer: await signer.getAddress(),
       transactionHash: deploymentTx.hash,
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),

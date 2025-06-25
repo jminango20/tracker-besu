@@ -1,5 +1,6 @@
 import { network } from "hardhat";
 import { DeploymentUtils } from "../lib/deploymentUtils";
+import { getDeployer } from "../lib/signerUtils";
 
 async function main() {
   // Get AddressDiscovery address from deployments
@@ -10,8 +11,10 @@ async function main() {
   }
   
   console.log(`Using AddressDiscovery at: ${addressDiscoveryAddress}`);
-  
-  await DeploymentUtils.deployContract("SchemaRegistry", [addressDiscoveryAddress]);
+
+  const deployer = await getDeployer();
+  // Deploy SchemaRegistry contract with AddressDiscovery address as constructor argument
+  await DeploymentUtils.deployContractWithSigner("SchemaRegistry", [addressDiscoveryAddress], deployer);
 }
 
 if (require.main === module) {
