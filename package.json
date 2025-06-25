@@ -9,7 +9,16 @@
     "lint": "solhint contracts/**/*.sol",
     "coverage": "npx hardhat coverage",
     "contract-size": "hardhat size-contracts",
-    "docs": "npx hardhat docgen"
+    "docs": "npx hardhat docgen",
+    "deploy:all:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/deploy.ts --network localhost",
+    "address-discovery:all:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/addToAddressDiscovery.ts --network localhost",
+    "deploy:address-discovery:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deployAddressDiscovery.ts --network localhost",
+    "deploy:access-channel-manager:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deployAccessChannelManager.ts --network localhost",
+    "deploy:schema-registry:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deploySchemaRegistry.ts --network localhost",
+    "address-discovery:single-contract:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/contractToAddressDiscovery.ts --network localhost",
+    "address-discovery-admin:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/admin/addressDiscoveryAdmin.ts --network localhost",
+    "access-channel-admin:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/admin/accessChannelAdmin.ts --network localhost",
+    "schema-registry-admin:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/admin/schemaRegistryAdmin.ts --network localhost"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.9",
