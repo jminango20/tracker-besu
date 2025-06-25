@@ -1,18 +1,10 @@
 import { ethers, network } from "hardhat";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { DeploymentUtils } from "./lib/deploymentUtils";
 
 async function main() {
   console.log(` Adding contracts to AddressDiscovery for network: ${network.name}`);
   
-  // Read deployment file
-  const deploymentFile = join("deployments", `${network.name}.json`);
-  
-  if (!existsSync(deploymentFile)) {
-    throw new Error(`No deployment file found: ${deploymentFile}`);
-  }
-  
-  const deployments = JSON.parse(readFileSync(deploymentFile, 'utf8'));
+  const deployments = DeploymentUtils.loadDeployments(network.name);
   
   // Get addresses
   const addressDiscoveryAddress = deployments.AddressDiscovery?.address;
