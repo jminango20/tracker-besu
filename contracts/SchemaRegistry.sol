@@ -117,7 +117,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
             newSchema.version,
             newSchema.owner,
             newSchema.channelName,
-            block.timestamp
+            _getTimeStamp()
         );
     }
 
@@ -143,7 +143,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
             schemaId,
             _msgSender(),
             channelName,
-            block.timestamp,
+            _getTimeStamp(),
             deprecatedCount  
         );
     }
@@ -172,7 +172,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
             previousStatus,
             _msgSender(),
             channelName,
-            block.timestamp
+            _getTimeStamp()
         );
     }
     
@@ -193,7 +193,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _validateVersionSequence(schemaUpdateInput.id, latestVersion, schemaUpdateInput.newVersion);
         _validateNewVersionUniqueness(schemaUpdateInput.channelName, schemaUpdateInput.id, schemaUpdateInput.newVersion);
         
-        uint256 timestamp = block.timestamp;
+        uint256 timestamp = _getTimeStamp();
         _deprecateCurrentSchema(currentSchema, timestamp);
         
         Schema memory newSchema = _createUpdatedSchema(schemaUpdateInput, currentSchema, timestamp);
@@ -465,8 +465,8 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
             owner: _msgSender(),
             channelName: input.channelName,
             status: SchemaStatus.ACTIVE,
-            createdAt: block.timestamp,
-            updatedAt: block.timestamp,
+            createdAt: _getTimeStamp(),
+            updatedAt: _getTimeStamp(),
             description: input.description
         });
     }
@@ -527,7 +527,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         internal 
         returns (uint256 deprecatedCount) 
     {
-        uint256 timestamp = block.timestamp;
+        uint256 timestamp = _getTimeStamp();
         
         for (uint256 version = 1; version <= latestVersion;) {
             if (_schemaExistsByChannelName[channelName][schemaId][version]) {
@@ -552,7 +552,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
 
     function _inactivateSchemaVersion(Schema storage schema, bytes32 channelName, bytes32 schemaId, uint256 version) internal {
         schema.status = SchemaStatus.INACTIVE;
-        schema.updatedAt = block.timestamp;
+        schema.updatedAt = _getTimeStamp();
         
         if (_isActiveSchemaIdByVersionAndChannel[channelName][schemaId][version]) {
             _isActiveSchemaIdByVersionAndChannel[channelName][schemaId][version] = false;
@@ -571,6 +571,10 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
 
     function _clearActiveVersion(bytes32 channelName, bytes32 schemaId) internal {
         _activeVersions[channelName][schemaId] = 0;
+    }
+
+    function _getTimeStamp() internal view returns (uint256) {
+        return block.timestamp;
     }
 
     // =============================================================
