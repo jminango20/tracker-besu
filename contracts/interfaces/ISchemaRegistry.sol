@@ -70,8 +70,7 @@ interface ISchemaRegistry {
         uint256 version, 
         address indexed owner, 
         bytes32 indexed channelName, 
-        uint256 timestamp,
-        uint256 expirationTime   
+        uint256 timestamp 
     );
 
     event SchemaInactivated(
@@ -103,13 +102,13 @@ interface ISchemaRegistry {
     error InvalidVersion();
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId);
     error SchemaVersionNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error NotSchemaOwner(bytes32 schemaId, address owner);
-    error SchemaNotActive(bytes32 schemaId, SchemaStatus status);
-    error SchemaAlreadyInactive(bytes32 schemaId, uint256 version);
-    error SchemaHasNoActiveVersion(bytes32 schemaId);
-    error CannotUpdateSchemaWithoutActiveVersion(bytes32 schemaId);
-    error SchemaAlreadyExistsCannotRecreate(bytes32 schemaId);
-    error SchemaNotDeprecated(bytes32 schemaId, uint256 version);
+    error NotSchemaOwner(bytes32 channelName, bytes32 schemaId, address owner);
+    error SchemaNotActive(bytes32 channelName, bytes32 schemaId, SchemaStatus status);
+    error SchemaAlreadyInactive(bytes32 channelName, bytes32 schemaId, uint256 version);
+    error SchemaHasNoActiveVersion(bytes32 channelName, bytes32 schemaId);
+    error NoActiveSchemaVersion(bytes32 channelName, bytes32 schemaId);
+    error SchemaAlreadyExistsCannotRecreate(bytes32 channelName, bytes32 schemaId);
+    error SchemaNotDeprecated(bytes32 channelName, bytes32 schemaId, uint256 version);
 
     // =============================================================
     //                    SCHEMA MANAGEMENT
