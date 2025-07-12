@@ -165,13 +165,13 @@ Get all versions of a specific schema
 | versions | uint256[] | Array of version numbers |
 | schemas | struct ISchemaRegistry.Schema[] | Array of schema data |
 
-### getSchema
+### getSchemaInfo
 
 ```solidity
-function getSchema(bytes32 channelName, bytes32 schemaId) external view returns (struct ISchemaRegistry.Schema schema)
+function getSchemaInfo(bytes32 channelName, bytes32 schemaId) external view returns (uint256 latestVersion, uint256 activeVersion, bool hasActiveVersion, address owner, uint256 totalVersions)
 ```
 
-Return the current schema (active or latest)
+Get information about a schema
 
 #### Parameters
 
@@ -184,29 +184,11 @@ Return the current schema (active or latest)
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| schema | struct ISchemaRegistry.Schema | schema The schema data |
-
-### getSchemasByStatus
-
-```solidity
-function getSchemasByStatus(bytes32 channelName, bytes32 schemaId, enum ISchemaRegistry.SchemaStatus status) external view returns (struct ISchemaRegistry.Schema[] schemas)
-```
-
-Returns all schema versions with specified status
-
-#### Parameters
-
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| channelName | bytes32 | The channel name |
-| schemaId | bytes32 | The schema ID |
-| status | enum ISchemaRegistry.SchemaStatus | The schema status |
-
-#### Return Values
-
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| schemas | struct ISchemaRegistry.Schema[] | schemas Array of schema data |
+| latestVersion | uint256 | The latest schema version |
+| activeVersion | uint256 | The active schema version |
+| hasActiveVersion | bool | True if the schema has an active version |
+| owner | address | The schema owner |
+| totalVersions | uint256 | The total number of versions |
 
 ### addSchemaAdmin
 
@@ -260,46 +242,34 @@ function _validateSchemaId(bytes32 schemaId) internal pure
 function _validateVersion(uint256 version) internal pure
 ```
 
-### _validateSchemaUniqueness
+### _getAndValidateActiveVersion
 
 ```solidity
-function _validateSchemaUniqueness(bytes32 channelName, bytes32 schemaId, uint256 version) internal view
+function _getAndValidateActiveVersion(bytes32 channelName, bytes32 schemaId) internal view returns (uint256)
+```
+
+### _validateLatestVersion
+
+```solidity
+function _validateLatestVersion(bytes32 channelName, bytes32 schemaId) internal view
 ```
 
 ### _validateSchemaOwnership
 
 ```solidity
-function _validateSchemaOwnership(bytes32 schemaId, address owner) internal view
+function _validateSchemaOwnership(struct ISchemaRegistry.Schema schema) internal view
 ```
 
 ### _validateSchemaCanBeInactivated
 
 ```solidity
-function _validateSchemaCanBeInactivated(bytes32 schemaId, uint256 version, enum ISchemaRegistry.SchemaStatus status) internal pure
+function _validateSchemaCanBeInactivated(struct ISchemaRegistry.Schema schema) internal view
 ```
 
-### _validateVersionSequence
+### _validateSchemaStatus
 
 ```solidity
-function _validateVersionSequence(bytes32 schemaId, uint256 latestVersion, uint256 newVersion) internal pure
-```
-
-### _validateNewVersionUniqueness
-
-```solidity
-function _validateNewVersionUniqueness(bytes32 channelName, bytes32 schemaId, uint256 newVersion) internal view
-```
-
-### _getSchemaVersions
-
-```solidity
-function _getSchemaVersions(bytes32 channelName, bytes32 schemaId) internal view returns (uint256 latestVersion, uint256 activeVersion)
-```
-
-### _getAndValidateActiveSchema
-
-```solidity
-function _getAndValidateActiveSchema(bytes32 channelName, bytes32 schemaId, uint256 activeVersion) internal view returns (struct ISchemaRegistry.Schema schema)
+function _validateSchemaStatus(struct ISchemaRegistry.Schema schema) internal view
 ```
 
 ### _getExistingSchema
@@ -314,10 +284,10 @@ function _getExistingSchema(bytes32 channelName, bytes32 schemaId, uint256 versi
 function _createNewSchema(struct ISchemaRegistry.SchemaInput input) internal view returns (struct ISchemaRegistry.Schema)
 ```
 
-### _createUpdatedSchema
+### _updatedSchema
 
 ```solidity
-function _createUpdatedSchema(struct ISchemaRegistry.SchemaUpdateInput input, struct ISchemaRegistry.Schema currentSchema, uint256 timestamp) internal view returns (struct ISchemaRegistry.Schema)
+function _updatedSchema(struct ISchemaRegistry.SchemaUpdateInput input, struct ISchemaRegistry.Schema currentSchema, uint256 timestamp) internal view returns (struct ISchemaRegistry.Schema)
 ```
 
 ### _storeNewSchema
@@ -329,25 +299,19 @@ function _storeNewSchema(struct ISchemaRegistry.Schema schema) internal
 ### _storeUpdatedSchema
 
 ```solidity
-function _storeUpdatedSchema(struct ISchemaRegistry.Schema newSchema, bytes32 channelName, uint256 previousActiveVersion) internal
-```
-
-### _deprecateAllActiveVersions
-
-```solidity
-function _deprecateAllActiveVersions(bytes32 channelName, bytes32 schemaId, uint256 latestVersion) internal returns (uint256 deprecatedCount)
+function _storeUpdatedSchema(struct ISchemaRegistry.Schema newSchema) internal
 ```
 
 ### _inactivateSchemaVersion
 
 ```solidity
-function _inactivateSchemaVersion(struct ISchemaRegistry.Schema schema, bytes32 channelName, bytes32 schemaId, uint256 version) internal
+function _inactivateSchemaVersion(struct ISchemaRegistry.Schema schema) internal
 ```
 
-### _deprecateCurrentSchema
+### _deprecateSchema
 
 ```solidity
-function _deprecateCurrentSchema(struct ISchemaRegistry.Schema schema, uint256 timestamp) internal
+function _deprecateSchema(struct ISchemaRegistry.Schema schema) internal
 ```
 
 ### _clearActiveVersion
@@ -356,22 +320,16 @@ function _deprecateCurrentSchema(struct ISchemaRegistry.Schema schema, uint256 t
 function _clearActiveVersion(bytes32 channelName, bytes32 schemaId) internal
 ```
 
+### _getTimeStamp
+
+```solidity
+function _getTimeStamp() internal view returns (uint256)
+```
+
 ### _updateCounters
 
 ```solidity
-function _updateCounters(bytes32 channelName, address owner, bool isNewSchema) internal
-```
-
-### _updateCountersForUpdate
-
-```solidity
-function _updateCountersForUpdate(bytes32 channelName, address owner) internal
-```
-
-### _decrementActiveSchemaCount
-
-```solidity
-function _decrementActiveSchemaCount(bytes32 channelName) internal
+function _updateCounters(bytes32 channelName, address owner) internal
 ```
 
 ### _buildVersionArrays
@@ -384,18 +342,6 @@ function _buildVersionArrays(bytes32 channelName, bytes32 schemaId, uint256 late
 
 ```solidity
 function _countExistingVersions(bytes32 channelName, bytes32 schemaId, uint256 latestVersion) internal view returns (uint256 count)
-```
-
-### _buildSchemasByStatus
-
-```solidity
-function _buildSchemasByStatus(bytes32 channelName, bytes32 schemaId, uint256 latestVersion, enum ISchemaRegistry.SchemaStatus status) internal view returns (struct ISchemaRegistry.Schema[] schemas)
-```
-
-### _countSchemasByStatus
-
-```solidity
-function _countSchemasByStatus(bytes32 channelName, bytes32 schemaId, uint256 latestVersion, enum ISchemaRegistry.SchemaStatus status) internal view returns (uint256 count)
 ```
 
 ### setAddressDiscovery

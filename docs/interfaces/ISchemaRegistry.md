@@ -20,7 +20,6 @@ enum SchemaStatus {
 struct SchemaInput {
   bytes32 id;
   string name;
-  uint256 version;
   bytes32 dataHash;
   bytes32 channelName;
   string description;
@@ -32,7 +31,6 @@ struct SchemaInput {
 ```solidity
 struct SchemaUpdateInput {
   bytes32 id;
-  uint256 newVersion;
   bytes32 newDataHash;
   bytes32 channelName;
   string description;
@@ -65,7 +63,7 @@ event SchemaCreated(bytes32 schemaId, string name, uint256 version, address owne
 ### SchemaDeprecated
 
 ```solidity
-event SchemaDeprecated(bytes32 schemaId, address owner, bytes32 channelName, uint256 timestamp, uint256 deprecatedVersions)
+event SchemaDeprecated(bytes32 schemaId, uint256 version, address owner, bytes32 channelName, uint256 timestamp)
 ```
 
 ### SchemaInactivated
@@ -80,34 +78,10 @@ event SchemaInactivated(bytes32 schemaId, uint256 version, enum ISchemaRegistry.
 event SchemaUpdated(bytes32 schemaId, uint256 previousVersion, uint256 newVersion, address owner, bytes32 channelName, uint256 timestamp)
 ```
 
-### SchemaAlreadyExistsInChannel
-
-```solidity
-error SchemaAlreadyExistsInChannel(bytes32 channelName, bytes32 schemaId, uint256 version)
-```
-
-### SchemaHasNoVersions
-
-```solidity
-error SchemaHasNoVersions(bytes32 schemaId, bytes32 channelName)
-```
-
 ### InvalidSchemaId
 
 ```solidity
 error InvalidSchemaId()
-```
-
-### InvalidVersion
-
-```solidity
-error InvalidVersion()
-```
-
-### InvalidSchemaName
-
-```solidity
-error InvalidSchemaName()
 ```
 
 ### InvalidDataHash
@@ -116,16 +90,22 @@ error InvalidSchemaName()
 error InvalidDataHash()
 ```
 
+### InvalidSchemaName
+
+```solidity
+error InvalidSchemaName()
+```
+
 ### DescriptionTooLong
 
 ```solidity
 error DescriptionTooLong()
 ```
 
-### SchemaAlreadyExists
+### InvalidVersion
 
 ```solidity
-error SchemaAlreadyExists(bytes32 schemaId)
+error InvalidVersion()
 ```
 
 ### SchemaNotFoundInChannel
@@ -134,52 +114,52 @@ error SchemaAlreadyExists(bytes32 schemaId)
 error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId)
 ```
 
-### NotSchemaOwner
-
-```solidity
-error NotSchemaOwner(bytes32 schemaId, address owner)
-```
-
-### SchemaNotActive
-
-```solidity
-error SchemaNotActive(bytes32 schemaId, enum ISchemaRegistry.SchemaStatus status)
-```
-
 ### SchemaVersionNotFoundInChannel
 
 ```solidity
 error SchemaVersionNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version)
 ```
 
-### SchemaNotActiveOrDeprecated
+### NotSchemaOwner
 
 ```solidity
-error SchemaNotActiveOrDeprecated(bytes32 schemaId, enum ISchemaRegistry.SchemaStatus status)
+error NotSchemaOwner(bytes32 channelName, bytes32 schemaId, address owner)
 ```
 
-### NoActiveSchemaVersion
+### SchemaNotActive
 
 ```solidity
-error NoActiveSchemaVersion(bytes32 schemaId)
-```
-
-### InvalidNewVersion
-
-```solidity
-error InvalidNewVersion(bytes32 schemaId, uint256 latestVersion, uint256 newVersion)
-```
-
-### SchemaVersionAlreadyExists
-
-```solidity
-error SchemaVersionAlreadyExists(bytes32 channelName, bytes32 schemaId, uint256 version)
+error SchemaNotActive(bytes32 channelName, bytes32 schemaId, enum ISchemaRegistry.SchemaStatus status)
 ```
 
 ### SchemaAlreadyInactive
 
 ```solidity
-error SchemaAlreadyInactive(bytes32 schemaId, uint256 version)
+error SchemaAlreadyInactive(bytes32 channelName, bytes32 schemaId, uint256 version)
+```
+
+### SchemaHasNoActiveVersion
+
+```solidity
+error SchemaHasNoActiveVersion(bytes32 channelName, bytes32 schemaId)
+```
+
+### NoActiveSchemaVersion
+
+```solidity
+error NoActiveSchemaVersion(bytes32 channelName, bytes32 schemaId)
+```
+
+### SchemaAlreadyExistsCannotRecreate
+
+```solidity
+error SchemaAlreadyExistsCannotRecreate(bytes32 channelName, bytes32 schemaId)
+```
+
+### SchemaNotDeprecated
+
+```solidity
+error SchemaNotDeprecated(bytes32 channelName, bytes32 schemaId, uint256 version)
 ```
 
 ### createSchema
@@ -327,13 +307,13 @@ Get all versions of a specific schema
 | versions | uint256[] | Array of version numbers |
 | schemas | struct ISchemaRegistry.Schema[] | Array of schema data |
 
-### getSchema
+### getSchemaInfo
 
 ```solidity
-function getSchema(bytes32 channelName, bytes32 schemaId) external view returns (struct ISchemaRegistry.Schema)
+function getSchemaInfo(bytes32 channelName, bytes32 schemaId) external view returns (uint256 latestVersion, uint256 activeVersion, bool hasActiveVersion, address owner, uint256 totalVersions)
 ```
 
-Return the current schema (active or latest)
+Get information about a schema
 
 #### Parameters
 
@@ -346,27 +326,9 @@ Return the current schema (active or latest)
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| [0] | struct ISchemaRegistry.Schema | schema The schema data |
-
-### getSchemasByStatus
-
-```solidity
-function getSchemasByStatus(bytes32 channelName, bytes32 schemaId, enum ISchemaRegistry.SchemaStatus status) external view returns (struct ISchemaRegistry.Schema[])
-```
-
-Returns all schema versions with specified status
-
-#### Parameters
-
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| channelName | bytes32 | The channel name |
-| schemaId | bytes32 | The schema ID |
-| status | enum ISchemaRegistry.SchemaStatus | The schema status |
-
-#### Return Values
-
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| [0] | struct ISchemaRegistry.Schema[] | schemas Array of schema data |
+| latestVersion | uint256 | The latest schema version |
+| activeVersion | uint256 | The active schema version |
+| hasActiveVersion | bool | True if the schema has an active version |
+| owner | address | The schema owner |
+| totalVersions | uint256 | The total number of versions |
 

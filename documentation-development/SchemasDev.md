@@ -6,7 +6,7 @@ Teremos um conjunto de métodos para que essas estruturas de dados possam ser ma
 - `deprecateSchema`, 
 - `inactivateSchema`, 
 - `updateSchema`,
-- `searchSchema`.
+- `getSchemaInfo`.
 
 As estruturas de dados serão versionadas e poderão ser utilizadas em um ou mais processos.
 
@@ -26,7 +26,7 @@ COMO rede blockchain QUERO validar os dados de um esquema PARA adicioná-lo na l
 - A estrutura dos dados não conter erros de sintaxe: 
     - Para o tipo "XML": deve atender a especificação descrita em [-https://www.w3.org/XML/Schema-]
     - Para o tipo "JSON": deve atender a especificação descrita em https://json-schema.org/draft/2019-09/json-schema-validation.html
-- O esquema deve ser único na legder por organização do usuário, identificador do schema, versão e situação igual a "ativo"
+- **O schema deve ser completamente novo - não pode existir qualquer versão anterior do mesmo schemaId no canal**    
 - Quando atendidas as regras descritas acima, adicionar o esquema na ledger para a organização com o campos descritos abaixo: 
     - Identificador da organização do usuário que submeteu a transação
     - Identificador do esquema
@@ -43,11 +43,11 @@ COMO rede blockchain QUERO validar os dados de um esquema PARA adicioná-lo na l
 #### Cumprimento das Regras de Negócio
 - **Permissões:** `onlyChannelMember(channelName)` - substitui validação por organização.
 - **Parâmetros obrigatórios:** Validações de `id`, `name`, `dataHash`, `description`.
-- **Unicidade:** `_schemaExistsByChannelName[channelName][schemaId]` - garante schema único por canal.
-- **Armazenamento completo:** `Struct Schema` contém todos os campos requeridos.
-- **Versão inicial: version:** 1 - sempre inicia em versão `1`.
+- **Schema único:** `_validateLatestVersion()` - garante que NÃO existe qualquer versão anterior do `schemaId`.
+- **Armazenamento completo:** `Struct Schema` contém todos os campos requeridos e `_createNewSchema()` e `_storeNewSchema()` - cria e armazena schema completo.
+- **Versão inicial:** `'version: 1` - sempre inicia na versão `1`.
 - **Status ativo:**  `SchemaStatus.ACTIVE` - situação definida como ativo.
-- **Timestamp:** `block.timestamp` - registro automático da transação.
+- **Timestamp:** `_getTimeStamp()` - registro automático da transação.
 - **Domínio público:** `SchemaCreated` event - visibilidade na rede.
 
 
@@ -59,22 +59,23 @@ COMO rede blockchain QUERO atualizar a situação de um esquema PARA descontinua
 ### Regras de Negócio
 Como rede blockchain quero atualizar a situação de um esquema para descontinuado, motivo pelo qual como parâmetro de entrada deve ser informado o identificador do esquema e o nome do canal onde o esquema está armazenado.
 
+- O usuário que submeteu a transação na ledger deve possuir permissão para realizar a operação.
+- A organização a qual o usuário pertence deve ser a proprietária do esquema.
+- Os parâmetros de entrada obrigatórios devem ser informados.
+- **Apenas a versão ativa do schema será depreciada (não todas as versões)**.
+- O esquema deve ter uma versão ativa para ser depreciado.
+- A versão ativa deve estar com status "ativo".
+
 #### Cumprimento das Regras de Negócio
 - **Permissões:** `onlyChannelMember(channelName)` - garante que apenas membros autorizados do canal podem deprecar schemas.
 - **Parâmetros obrigatórios:** Validação de `schemaId` (não pode ser zero) e `channelName` (validado por modifier).
-- **Existência do schema:** `_schemaExistsByChannelName[channelName][schemaId]` - verifica se o schema existe no canal especificado.
-- **Controle de propriedade:** `schema.owner != _msgSender()` - apenas o proprietário original pode deprecar o schema.
+- **Versão ativa:** `_getAndValidateActiveVersion()` - verifica se existe versão ativa do schema.
+- **Propriedade:** `_validateSchemaOwnership()` - apenas o proprietário original pode deprecar.
 - **Status válido:** `schema.status != SchemaStatus.ACTIVE` - só permite deprecar schemas que estão ativos.
-- **Atualização de situação:** `schema.status = SchemaStatus.DEPRECATED` - muda situação para descontinuado.
-- **Timestamp:** `schema.updatedAt = block.timestamp` - registro automático da atualização.
+- **Depreciação:** `_deprecateSchema()` - muda situação da versão ativa para descontinuado.
+- **Limpeza:** `_clearActiveVersion()` - remove referência à versão ativa.
+- **Timestamp:** `_getTimeStamp()` - registro automático da atualização.
 - **Domínio público:** `SchemaDeprecated` event - visibilidade da operação na rede.
-
-#### **Considerações Adicionais a Avaliar**
-- Verificação de uso ativo: Considerar validar se o schema não está sendo usado em processos ativos antes de permitir depreciação.
-- Dependências: Verificar se outros schemas ou processos dependem deste schema.
-- Versionamento: Avaliar impacto em outras versões do mesmo schema (se existirem).
-- Reversibilidade: Considerar se schemas depreciados podem voltar a ser ativos ou se é operação irreversível.
-- Nota: Quando descontinuo um schema, todas as versões desse schema também são descontinuadas.
 
 ***
 ## `inactivateSchema`
@@ -85,17 +86,26 @@ COMO rede blockchain QUERO atualizar a situação de um esquema PARA inativo.
 Como rede blockchain quero atualizar a situação de um esquema para inativo, motivo pelo qual como parâmetro de entrada deve ser informado o identificador do esquema, a
 versão e o nome do canal onde o esquema está armazenado.
 
+- O usuário que submeteu a transação na ledger deve possuir permissão para realizar a operação.
+- A organização a qual o usuário pertence deve ser a proprietária do esquema.
+- Os parâmetros de entrada obrigatórios devem ser informados.
+- A versão específica do esquema deve existir no canal.
+- A versão não pode estar já inativa.
+- A versão deve estar ativa ou depreciada para ser inativada.
+
 #### Cumprimento das Regras de Negócio
 
 - **Permissões:** `onlyChannelMember(channelName)` - garante que apenas membros autorizados do canal podem inativar schemas.
 - **Validação de canal:** `validChannelName(channelName)` - valida se o canal é válido.
 - **Propriedade do schema:** `schema.owner != _msgSender()` - garante que apenas o proprietário original pode inativar o schema.
 - **Parâmetros obrigatórios:** Validações de `schemaId` (não pode ser zero), `version` (não pode ser zero) e `channelName` (validado por modifiers).
-- **Existência e versão:** `_schemaExistsByChannelName[channelName][schemaId][version]` - verifica se a versão específica existe no canal.
-- **Status válido:** `schema.status != SchemaStatus.ACTIVE && schema.status != SchemaStatus.DEPRECATED` - permite inativação apenas de schemas ativos ou depreciados.
-- **Atualização de situação:** `schema.status = SchemaStatus.INACTIVE` - muda situação para inativo.
-- **Timestamp:** `schema.updatedAt = block.timestamp` - registro automático da transação.
-- **Tipo da transação:** `SchemaInactivated` event - representa o tipo da operação na rede.
+- **Existência:** `_getExistingSchema()` - verifica se a versão específica existe no canal.
+- **Propriedade:** `_validateSchemaOwnership()` - garante que apenas o proprietário pode inativar.
+- **Status válido:** `_validateSchemaCanBeInactivated()` - impede inativação dupla.
+- **Inativação:** `_inactivateSchemaVersion()` - muda situação para inativo.
+- **Versão ativa:** Limpa `_activeVersions` se a versão inativada era a ativa.
+- **Timestamp:** `_getTimeStamp()` - registro automático da transação.
+- **Domínio público:** `SchemaInactivated` event - representa o tipo da operação na rede.
 
 ***
 ## `updateSchema`
@@ -111,33 +121,23 @@ COMO rede blockchain QUERO alterar os dados de um esquema cadastrado na ledger P
         - Para o tipo "XML": deve atender a especificação descrita em [-https://www.w3.org/XML/Schema-].
         - Para o tipo "JSON": deve atender a especificação descrita em https://json-schema.org/draft/2019-09/json-schema-validation.html.
 - O esquema deve existir cadastrado na ledger com estado atual igual a "ativo"
-- A nova versão deve ser maior que as versões anteriores do esquema (utilizar ordem alfabética para esta validação).
+- A nova versão será automaticamente calculada como versão atual + 1.
 - Quando atendidas as regras descritas acima.
-    - Atualizar a versão atual do esquema na ledger com os dados descritos abaixo: 
-        - Situação: com o valor "descontinuado".
-        - Tipo da transação: com o valor "updateSchema".
-        - Timestamp da transação.
-    - Adicionar a nova versão do esquema na ledger com os valores recebidos nos parâmetros de entrada e:  
-        - Situação: com o valor "ativo".
-        - Tipo da transação: com o valor "updateSchema".
-        - Timestamp da transação.
+    - Depreciar a versão ativa atual.
+    - Criar nova versão com status "ativo".
+    - Timestamp da transação para ambas operações.
 
 #### Cumprimento das Regras de Negócio
 
 - **Permissões:** `onlyChannelMember(schemaUpdateInput.channelName)` - garante que apenas membros autorizados do canal podem atualizar schemas.
-- **Validação de canal:** `validChannelName(schemaUpdateInput.channelName)` - valida se o canal é válido.
-- **Propriedade do schema:** `currentSchema.owner != _msgSender()` - garante que apenas o proprietário original pode atualizar o schema.
-- **Parâmetros obrigatórios:** Validações de `id`, `newVersion`, `newDataHash` e `description` (tamanho máximo).
-- **Estrutura de dados:** `newDataHash` contém hash dos dados JSON/XML validados off-chain antes do submit.
-- **Existência do schema:** `latestVersion == 0` e `activeVersion == 0` - verifica se schema existe e tem versão ativa.
-- **Status ativo:** `currentSchema.status != SchemaStatus.ACTIVE` - só permite atualizar schemas que estão ativos.
-- **Versão sequencial:** `schemaUpdateInput.newVersion <= latestVersion` - nova versão deve ser numericamente maior que a anterior.
-- **Unicidade de versão:** `_schemaExistsByChannelName[channelName][schemaId][newVersion]` - garante que a nova versão não existe.
-- **Deprecar versão atual:** `currentSchema.status = SchemaStatus.DEPRECATED` - marca versão anterior como descontinuada.
-- **Nova versão ativa:** `status: SchemaStatus.ACTIVE` no novo schema - adiciona nova versão como ativa.
-- **Timestamp:** `block.timestamp` - registro automático da transação para ambas operações.
-- **Controle de versões:** Atualiza `_latestVersions` e `_activeVersions` para apontar para nova versão.
-- **Tipo da transação:** `SchemaUpdated` event - representa ambas operações (deprecar + criar) na rede.
+- **Parâmetros obrigatórios**: `_validateSchemaUpdateInput()` - valida id, newDataHash, description.
+- **Versão ativa**: `_getAndValidateActiveVersion()` - verifica se existe versão ativa.
+- **Propriedade**: `_validateSchemaOwnership()` - apenas proprietário pode atualizar.
+- **Status ativo**: `_validateSchemaStatus()` - só permite atualizar schemas ativos.
+- **Versionamento automático**: `_updatedSchema()` - calcula nova versão como currentVersion + 1.
+- **Operação atômica**: `_deprecateSchema() + _storeUpdatedSchema()` - deprecia atual e cria nova.
+- **Timestamp**: `_getTimeStamp()` - registro automático para ambas operações.
+- **Domínio público**: `SchemaUpdated` event - representa ambas operações na rede.
 
 ##### Adaptações Besu
 - **Validação de sintaxe:** Responsabilidade off-chain antes do hash (limitações de gas).
@@ -162,6 +162,7 @@ COMO rede blockchain QUERO consultar uma versão específica de um esquema PARA 
 #### Validações
 - **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
 - **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Parâmetros:** `_validateSchemaId()` e `_validateVersion()` - valida entrada.
 - **Existência**: Verifica se a versão específica existe no canal.
 
 ***
@@ -181,6 +182,7 @@ COMO rede blockchain QUERO consultar o esquema ativo de um identificador PARA us
 #### Validações
 - **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
 - **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Parâmetros:** `_validateSchemaId()` - valida entrada.
 - **Versão ativa**: Verifica se existe uma versão ativa no canal.
 
 ***
@@ -200,6 +202,7 @@ COMO rede blockchain QUERO consultar a última versão de um esquema PARA ter ac
 #### Validações
 - **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
 - **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Parâmetros:** `_validateSchemaId()` - valida entrada.
 - **Existência**: Verifica se o schema existe no canal.
 
 ***
@@ -220,12 +223,13 @@ COMO rede blockchain QUERO consultar todas as versões de um esquema PARA ter vi
 #### Validações
 - **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
 - **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Parâmetros:** `_validateSchemaId()` - valida entrada.
 - **Existência**: Verifica se o schema existe no canal.
 
 ***
-## `getSchema`
+## `getSchemaInfo`
 ### Descrição
-COMO rede blockchain QUERO consultar um esquema de forma inteligente PARA obter a versão mais adequada (ativa ou última disponível).
+COMO rede blockchain QUERO consultar informações resumidas de um esquema PARA ter visão geral rápida sem carregar dados completos.
 
 #### Parâmetros
 
@@ -234,40 +238,14 @@ COMO rede blockchain QUERO consultar um esquema de forma inteligente PARA obter 
 
 #### Retorno
 
-- `Schema memory`: Estrutura completa do schema (versão ativa ou última versão).
-
-#### Lógica de Priorização
-
-- **Primeira prioridade**: Retorna versão ativa se existir.
-- **Segunda prioridade**: Retorna última versão se não houver versão ativa.
-
-#### Validações
-- **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
-- **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
-- **Existência**: Verifica se o schema existe no canal.
-
-**
-## `getSchemasByStatus`
-### Descrição
-COMO rede blockchain QUERO consultar esquemas filtrados por status PARA análise específica de schemas ativos, depreciados ou inativos.
-
-#### Parâmetros
-
-- `channelName`: Nome do canal onde o schema está armazenado.
-- `schemaId`: Identificador único do schema.
-- `status`: Status desejado (`ACTIVE`, `DEPRECATED`, `INACTIVE`).
-
-#### Retorno
-
-- `Schema[] memory`: Array com todas as versões do schema que possuem o status solicitado.
-
-#### Casos de Uso
-
-- `ACTIVE`: Listar versões ativas para validação.
-- `DEPRECATED`: Consultar versões descontinuadas para auditoria.
-- `INACTIVE`: Verificar versões inativas para análise histórica.
+- `uint256 latestVersion`: Número da última versão disponível.
+- `uint256 activeVersion`: Número da versão ativa (0 = nenhuma ativa).
+- `bool hasActiveVersion`: Indica se existe versão ativa.
+- `address owner`: Endereço do proprietário (da última versão).
+- `uint256 totalVersions`: Quantidade total de versões existentes.
 
 #### Validações
 - **Permissões**: `onlyChannelMember(channelName)` - apenas membros do canal podem consultar (Não é necessário este controle em Besu).
 - **Canal válido**: `validChannelName(channelName)` - valida se o canal existe.
+- **Parâmetros:** `_validateSchemaId()` - valida entrada.
 - **Existência**: Verifica se o schema existe no canal.
