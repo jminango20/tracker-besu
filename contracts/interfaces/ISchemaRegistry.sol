@@ -25,7 +25,6 @@ interface ISchemaRegistry {
     struct SchemaInput {
         bytes32 id;                    // Schema unique identifier
         string name;                   // Schema name
-        uint256 version;               // Schema version
         bytes32 dataHash;              // Hash of the complete JSON schema (stored off-chain)
         bytes32 channelName;           // Virtual channel name
         string description;            // Schema description
@@ -34,7 +33,6 @@ interface ISchemaRegistry {
     // Update struct for updating schemas
     struct SchemaUpdateInput {
         bytes32 id;                // Schema unique identifier to be updated
-        uint256 newVersion;        // New version number
         bytes32 newDataHash;       // Updated hash of the complete JSON schema (stored off-chain)
         bytes32 channelName;       // Virtual channel name
         string description;        // Updated schema description
@@ -68,11 +66,11 @@ interface ISchemaRegistry {
     );
 
     event SchemaDeprecated(
-        bytes32 indexed schemaId, 
+        bytes32 indexed schemaId,
+        uint256 version, 
         address indexed owner, 
         bytes32 indexed channelName, 
-        uint256 timestamp,
-        uint256 deprecatedVersions
+        uint256 timestamp 
     );
 
     event SchemaInactivated(
@@ -97,23 +95,20 @@ interface ISchemaRegistry {
     //                        CUSTOM ERRORS
     // =============================================================
     
-    error SchemaAlreadyExistsInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error SchemaHasNoVersions(bytes32 schemaId, bytes32 channelName); 
     error InvalidSchemaId();
-    error InvalidVersion();
-    error InvalidSchemaName();
     error InvalidDataHash();
+    error InvalidSchemaName();
     error DescriptionTooLong();
-    error SchemaAlreadyExists(bytes32 schemaId);
+    error InvalidVersion();
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId);
-    error NotSchemaOwner(bytes32 schemaId, address owner);
-    error SchemaNotActive(bytes32 schemaId, SchemaStatus status);
     error SchemaVersionNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error SchemaNotActiveOrDeprecated(bytes32 schemaId, SchemaStatus status);
-    error NoActiveSchemaVersion(bytes32 schemaId);
-    error InvalidNewVersion(bytes32 schemaId, uint256 latestVersion, uint256 newVersion);
-    error SchemaVersionAlreadyExists(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error SchemaAlreadyInactive(bytes32 schemaId, uint256 version);
+    error NotSchemaOwner(bytes32 channelName, bytes32 schemaId, address owner);
+    error SchemaNotActive(bytes32 channelName, bytes32 schemaId, SchemaStatus status);
+    error SchemaAlreadyInactive(bytes32 channelName, bytes32 schemaId, uint256 version);
+    error SchemaHasNoActiveVersion(bytes32 channelName, bytes32 schemaId);
+    error NoActiveSchemaVersion(bytes32 channelName, bytes32 schemaId);
+    error SchemaAlreadyExistsCannotRecreate(bytes32 channelName, bytes32 schemaId);
+    error SchemaNotDeprecated(bytes32 channelName, bytes32 schemaId, uint256 version);
 
     // =============================================================
     //                    SCHEMA MANAGEMENT
@@ -181,25 +176,24 @@ interface ISchemaRegistry {
     function getSchemaVersions(bytes32 channelName, bytes32 schemaId) external view returns (uint256[] memory versions, Schema[] memory schemas);
 
     /**
-     * Return the current schema (active or latest)
+     * Get information about a schema
      * @param channelName The channel name
      * @param schemaId The schema ID
-     * @return schema The schema data
+     * @return latestVersion The latest schema version
+     * @return activeVersion The active schema version
+     * @return hasActiveVersion True if the schema has an active version
+     * @return owner The schema owner
+     * @return totalVersions The total number of versions
      */
-    function getSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory);
-
-    /**
-     * Returns all schema versions with specified status
-     * @param channelName The channel name
-     * @param schemaId The schema ID
-     * @param status The schema status
-     * @return schemas Array of schema data
-     */
-    function getSchemasByStatus(
+    function getSchemaInfo(
         bytes32 channelName, 
-        bytes32 schemaId, 
-        SchemaStatus status
-    ) external view returns (Schema[] memory);
-
-
+        bytes32 schemaId
+    ) external view returns 
+        (
+            uint256 latestVersion, 
+            uint256 activeVersion, 
+            bool hasActiveVersion, 
+            address owner, 
+            uint256 totalVersions
+        );
 }
