@@ -20,6 +20,9 @@ bytes32 constant ADDRESS_DISCOVERY_ADMIN_ROLE = keccak256("ADDRESS_DISCOVERY_ADM
 
 /// @dev Role for schema admin operations 
 bytes32 constant SCHEMA_ADMIN_ROLE = keccak256("SCHEMA_ADMIN_ROLE");
+
+/// @dev Role for process admin operations
+bytes32 constant PROCESS_ADMIN_ROLE = keccak256("PROCESS_ADMIN_ROLE");
    
 // =============================================================
 //                        SYSTEM LIMITS
@@ -44,17 +47,17 @@ uint256 constant INVALID_PAGE = 0;
 uint256 constant MAX_STRING_LENGTH = 255;
     
 // =============================================================
-//                        VERSION & METADATA
+//                        CONTRACT IDENTIFIERS
 // =============================================================
-   
-/// @dev Contract version
-string constant VERSION = "1.0.0";
-    
-/// @dev Contract name for events and metadata
-string constant CONTRACT_NAME = "AccessChannelManager";
 
 /// @dev Contract name of AccessChannelManager
 bytes32 constant ACCESS_CHANNEL_MANAGER = keccak256("ACCESS_CHANNEL_MANAGER");
+
+/// @dev Contract name of SchemaRegistry
+bytes32 constant SCHEMA_REGISTRY = keccak256("SCHEMA_REGISTRY");
+
+/// @dev Contract name of ProcessRegistry
+bytes32 constant PROCESS_REGISTRY = keccak256("PROCESS_REGISTRY");
     
 // =============================================================
 //                        STATUS FLAGS
