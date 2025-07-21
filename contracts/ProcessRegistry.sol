@@ -5,6 +5,7 @@ import {BaseTraceContract} from "./BaseTraceContract.sol";
 import {IProcessRegistry} from "./interfaces/IProcessRegistry.sol";
 import {ISchemaRegistry} from "./interfaces/ISchemaRegistry.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {
     PROCESS_ADMIN_ROLE,
     MAX_STRING_LENGTH,
@@ -17,7 +18,7 @@ import {Utils} from "./lib/Utils.sol";
  * @notice Contract for managing business processes in the trace system
  * @dev Inherits from BaseTraceContract for common functionality
  */
-contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
+contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausable {
 
     // =============================================================
     //                        STORAGE
@@ -37,16 +38,31 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
 
     /**
      * Mapping to track process existence by channel name
-     * @dev channelName => processId => exists
-     */
-    mapping(bytes32 => mapping(bytes32 => bool)) private _processExists;
-
-    /**
-     * Mapping to track process existence by channel name
      * @dev channelName => processId => compositeKey
      */
     mapping(bytes32 => mapping(bytes32 => bytes32)) private _simpleToComposite;
-    
+
+    /**
+     * Mapping to track paused processes by channel name
+     * @dev channelName => processId => isPaused
+    */
+    mapping(bytes32 => mapping(bytes32 => bool)) private _processPaused;
+
+    // =============================================================
+    //                        MODIFIERS
+    // =============================================================
+
+    /**
+     * Modifier to check if a process is paused
+     * @param channelName Channel name
+     * @param processId Process identifier
+     */
+    modifier whenProcessNotPaused(bytes32 channelName, bytes32 processId) {
+        if (_processPaused[channelName][processId]) {
+            revert ProcessPaused(channelName, processId);
+        }
+        _;
+    }
    
     // =============================================================
     //                       CONSTRUCTOR
@@ -141,7 +157,8 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
             natureId,
             stageId,
             channelName,
-            newStatus
+            newStatus,
+            false
         );
     }
 
@@ -153,13 +170,37 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         bytes32 natureId,
         bytes32 stageId,
         bytes32 channelName
-    ) external {
+    ) 
+        external
+        validChannelName(channelName)
+    {
         _setProcessStatus(
             processId,
             natureId,
             stageId,
             channelName,
-            ProcessStatus.INACTIVE
+            ProcessStatus.INACTIVE,
+            false
+        );
+    }
+
+    function inactivateProcessWithCascade(
+        bytes32 processId,
+        bytes32 natureId,
+        bytes32 stageId,
+        bytes32 channelName,
+        bool cascadeSchemas  
+    ) 
+      external 
+      validChannelName(channelName) 
+    {
+        _setProcessStatus(
+            processId, 
+            natureId, 
+            stageId, 
+            channelName, 
+            ProcessStatus.INACTIVE, 
+            cascadeSchemas
         );
     }
 
@@ -225,6 +266,142 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
 
         return _getProcess(channelName, processId).status;
 
+    }
+
+    // =============================================================
+    //                    SCHEMA DEPENDENCY MANAGEMENT
+    // =============================================================
+
+    /**
+     * @inheritdoc IProcessRegistry
+     * @dev This function is called by the SchemaRegistry contract
+     * Pausar processo quando schema inativado (chamado off-chain via monitoring)
+     */
+    function pauseProcessBySchemaIssue(
+        bytes32 channelName,
+        bytes32 processId,
+        string calldata reason
+    ) 
+        external 
+        validChannelName(channelName)
+        onlyRole(PROCESS_ADMIN_ROLE) 
+    {
+        if (processId == bytes32(0)) revert InvalidProcessId();
+        
+        bytes32 compositeKey = _simpleToComposite[channelName][processId];
+        if (compositeKey == bytes32(0)) {
+            revert ProcessNotFound(channelName, processId);
+        }
+
+        _processPaused[channelName][processId] = true;
+        
+        emit ProcessPausedBySchemaIssue(
+            channelName, 
+            processId, 
+            _msgSender(), 
+            reason, 
+            Utils.timestamp()
+        );
+    }
+
+    /**
+     * @inheritdoc IProcessRegistry
+     * @dev This function is called by the SchemaRegistry contract
+     * Reativar processo quando schema corrigido/substituído
+     */
+    function resumeProcess(
+        bytes32 channelName,
+        bytes32 processId
+    ) 
+        external 
+        validChannelName(channelName)
+        onlyRole(PROCESS_ADMIN_ROLE) 
+    {
+        if (processId == bytes32(0)) revert InvalidProcessId();
+        
+        bytes32 compositeKey = _simpleToComposite[channelName][processId];
+        if (compositeKey == bytes32(0)) {
+            revert ProcessNotFound(channelName, processId);
+        }
+
+        Process storage process = _processes[channelName][compositeKey];
+
+        _validateActiveSchemas(process.schemas, channelName);
+
+        _processPaused[channelName][processId] = false;
+        
+        emit ProcessResumed(
+            channelName, 
+            processId, 
+            _msgSender(), 
+            Utils.timestamp()
+        );
+    }
+
+    /**
+     * @inheritdoc IProcessRegistry
+     * @dev This function is called by the SchemaRegistry contract
+     * Checar se processo está pausado por schema issues
+     */
+    function isProcessPausedBySchemaIssue(
+        bytes32 channelName,
+        bytes32 processId
+    ) 
+        external 
+        validChannelName(channelName)
+        view 
+        returns (bool) 
+    {
+        return _processPaused[channelName][processId];
+    }
+
+    // =============================================================
+    // FUNCTION TO BE CALLED BY PROCESS SUBMISSION
+    // =============================================================
+
+    /**
+     * @inheritdoc IProcessRegistry
+     */
+    function validateProcessForSubmission(
+        bytes32 channelName,
+        bytes32 processId
+    ) 
+        external 
+        validChannelName(channelName)
+        view 
+        returns (bool isValid, string memory reason) 
+    {
+        // 1. Check se processo existe
+        bytes32 compositeKey = _simpleToComposite[channelName][processId];
+        if (compositeKey == bytes32(0)) {
+            return (false, "Process not found");
+        }
+
+        // 2. Check se processo está ativo
+        Process storage process = _processes[channelName][compositeKey];
+        if (process.status != ProcessStatus.ACTIVE) {
+            return (false, "Process not active");
+        }
+        // 3. Check se processo não está pausado por schema issues
+        if (_processPaused[channelName][processId]) {
+            return (false, "Process paused due to schema issues");
+        }
+
+        // 4. Validar schemas ainda ativos 
+        try this._validateSchemasForSubmission(channelName, process.schemas) {
+            return (true, "Process valid for submission");
+        } catch Error(string memory error) {
+            return (false, error);
+        } catch {
+            return (false, "Schema validation failed");
+        }
+    }
+
+    function _validateSchemasForSubmission(
+        bytes32 channelName,
+        SchemaReference[] memory schemas
+    ) external view {
+        _validateActiveSchemas(schemas, channelName);
     }
 
     // =============================================================
@@ -323,6 +500,35 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         }    
     }
 
+    function _validateActiveSchemas(
+        SchemaReference[] memory schemas,
+        bytes32 channelName
+    ) internal view {
+        ISchemaRegistry schemaRegistry = ISchemaRegistry(
+            _getAddressDiscovery().getContractAddress(SCHEMA_REGISTRY)
+        );
+        
+        for (uint256 i = 0; i < schemas.length; i++) {
+            try schemaRegistry.getSchemaByVersion(
+                channelName, schemas[i].schemaId, schemas[i].version
+            ) returns (ISchemaRegistry.Schema memory schema) {
+                if (schema.status == ISchemaRegistry.SchemaStatus.INACTIVE) {
+                    revert SchemaNotActiveInChannel(
+                        channelName, 
+                        schemas[i].schemaId, 
+                        schemas[i].version
+                    );
+                }
+            } catch {
+                revert SchemaNotFoundInChannel(
+                    channelName, 
+                    schemas[i].schemaId, 
+                    schemas[i].version
+                );
+            }
+        }
+    }
+
     // =============================================================
     //                    INTERNAL OPERATIONS
     // =============================================================
@@ -380,14 +586,21 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         bytes32 natureId,
         bytes32 stageId,
         bytes32 channelName,
-        ProcessStatus newStatus
+        ProcessStatus newStatus,
+        bool cascadeSchemas
     ) internal 
     {
-        bytes32 uniqueKey = keccak256(abi.encodePacked(
-            channelName, processId, natureId, stageId
-        ));
+        bytes32 uniqueKey = keccak256(
+            abi.encodePacked(
+                channelName, 
+                processId, 
+                natureId, 
+                stageId
+            )
+        );
 
-        if (!_processExists[channelName][uniqueKey]) {
+        bytes32 compositeKey = _simpleToComposite[channelName][processId];
+        if (compositeKey == bytes32(0)) {
             revert ProcessNotFound(channelName, processId);
         }
 
@@ -404,11 +617,12 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         process.status = newStatus;
         process.lastUpdated = Utils.timestamp();
         
-        // Atualizar index de ativos
         _activeProcessKeys[uniqueKey] = (newStatus == ProcessStatus.ACTIVE);
 
         // CASCADE SCHEMA INACTIVATION
-        if (newStatus == ProcessStatus.INACTIVE && oldStatus == ProcessStatus.ACTIVE) {
+        if (newStatus == ProcessStatus.INACTIVE && 
+            oldStatus == ProcessStatus.ACTIVE &&
+            cascadeSchemas) {
             _inactivateAssociatedSchemas(process, channelName);
         }
 
@@ -478,7 +692,6 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     ) internal 
     {
         _activeProcessKeys[uniqueKey] = true;
-        _processExists[channelName][uniqueKey] = true;
         _simpleToComposite[channelName][processId] = uniqueKey;
     }
 

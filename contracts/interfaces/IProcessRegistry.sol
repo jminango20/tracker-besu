@@ -102,6 +102,21 @@ interface IProcessRegistry {
         string reason
     );
 
+    event ProcessPausedBySchemaIssue(
+        bytes32 indexed channelName,
+        bytes32 indexed processId,
+        address indexed pausedBy,
+        string reason,
+        uint256 timestamp
+    );
+    
+    event ProcessResumed(
+        bytes32 indexed channelName,
+        bytes32 indexed processId,
+        address indexed resumedBy,
+        uint256 timestamp
+    );
+
     // =============================================================
     //                        ERRORS
     // =============================================================
@@ -119,6 +134,7 @@ interface IProcessRegistry {
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
     error DescriptionTooLong();
     error InvalidProcessStatusTransition(ProcessStatus current, ProcessStatus newStatus, string reason);
+    error ProcessPaused(bytes32 channelName, bytes32 processId);
    
     // =============================================================
     //                    PROCESS MANAGEMENT
@@ -129,21 +145,6 @@ interface IProcessRegistry {
      * @param processInput Process data to create
      */
     function createProcess(ProcessInput calldata processInput) external;
-
-    /**
-     * Inactivates an existing process
-     * @param processId Process identifier
-     * @param natureId Nature identifier
-     * @param stageId Stage identifier
-     * @param channelName Channel name
-     */
-    function inactivateProcess(
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName
-    ) external;
-
     /**
      * Set process status 
      * @param processId Process identifier
@@ -160,10 +161,51 @@ interface IProcessRegistry {
         ProcessStatus newStatus
     ) external;
 
+    /**
+     * Inactivates an existing process
+     * @param processId Process identifier
+     * @param natureId Nature identifier
+     * @param stageId Stage identifier
+     * @param channelName Channel name
+     */
+    function inactivateProcess(
+        bytes32 processId,
+        bytes32 natureId,
+        bytes32 stageId,
+        bytes32 channelName
+    ) external;
+
+    /**
+     * Inactivates an existing process with cascade of schemas
+     * @param processId Process identifier
+     * @param natureId Nature identifier
+     * @param stageId Stage identifier
+     * @param channelName Channel name
+     * @param cascadeSchemas Boolean to indicate if schemas should be cascaded
+     */
+    function inactivateProcessWithCascade(
+        bytes32 processId,
+        bytes32 natureId,
+        bytes32 stageId,
+        bytes32 channelName,
+        bool cascadeSchemas  
+    ) external;
+
     // =============================================================
     //                    VIEW FUNCTIONS
     // =============================================================
     
+    /**
+     * Get process by simple ID
+     * @param processId Process identifier
+     * @param channelName Channel name
+     * @return process The process data
+     */
+    function getProcessById(
+        bytes32 processId,
+        bytes32 channelName
+    ) external view returns (Process memory process);
+
     /**
      * Gets a specific process (full compatibility with Fabric)
      * @param processId Process identifier
@@ -180,17 +222,6 @@ interface IProcessRegistry {
     ) external view returns (Process memory process);
 
     /**
-     * Get process by simple ID
-     * @param processId Process identifier
-     * @param channelName Channel name
-     * @return process The process data
-     */
-    function getProcessById(
-        bytes32 processId,
-        bytes32 channelName
-    ) external view returns (Process memory process);
-
-    /**
      * Get process status quickly
      * @param processId Process identifier
      * @param channelName Channel name
@@ -201,22 +232,56 @@ interface IProcessRegistry {
         bytes32 channelName
     ) external view returns (ProcessStatus status);
 
+    // =============================================================
+    //                    SCHEMA DEPENDENCY MANAGEMENT
+    // =============================================================
+
     /**
-     * Generate unique key for a process (utility function)
+     * Pauses a process by schema issue
      * @param channelName Channel name
      * @param processId Process identifier
-     * @param natureId Nature identifier
-     * @param stageId Stage identifier
-     * @return key Unique process key
+     * @param reason Reason for pausing the process
      */
-    /*
-    function generateProcessKey(
+    function pauseProcessBySchemaIssue(
         bytes32 channelName,
         bytes32 processId,
-        bytes32 natureId, 
-        bytes32 stageId
-    ) external pure returns (bytes32 key);
-    */
+        string calldata reason
+    ) external;
 
-    
+    /**
+     * Resumes a paused process by schema issue
+     * @param channelName Channel name
+     * @param processId Process identifier
+     */
+    function resumeProcess(
+        bytes32 channelName,
+        bytes32 processId
+    ) external; 
+
+    /**
+     * Verifies if a process is paused by schema issue
+     * @param channelName Channel name
+     * @param processId Process identifier
+    */
+    function isProcessPausedBySchemaIssue(
+        bytes32 channelName,
+        bytes32 processId
+    ) external view returns (bool);
+
+    // =============================================================
+    // FUNCTION TO BE CALLED BY PROCESS SUBMISSION
+    // =============================================================
+
+    /**
+     * Validates if a process is valid for submission
+     * @param channelName Channel name
+     * @param processId Process identifier
+     * @return isValid Boolean indicating if the process is valid for submission
+     * @return reason Reason for the process not being valid for submission
+     */
+    function validateProcessForSubmission(
+        bytes32 channelName,
+        bytes32 processId
+    ) external view returns (bool isValid, string memory reason);
+     
 }
