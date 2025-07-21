@@ -9,6 +9,17 @@ pragma solidity ^0.8.20;
 interface IAccessChannelManager {
 
     // =============================================================
+    //                           EVENTS
+    // =============================================================
+    event ChannelCreated(bytes32 indexed channelName, address indexed creator, uint256 timestamp);
+    event ChannelActivated(bytes32 indexed channelName, uint256 timestamp);
+    event ChannelDeactivated(bytes32 indexed channelName, uint256 timestamp);
+    event ChannelMemberAdded(bytes32 indexed channelName, address indexed member, uint256 newMemberCount);
+    event ChannelMemberRemoved(bytes32 indexed channelName, address indexed member, uint256 newMemberCount);
+    event ChannelMembersAdded(bytes32 indexed channelName, address[] members, uint256 newMemberCount);
+    event ChannelMembersRemoved(bytes32 indexed channelName, address[] members, uint256 newMemberCount);
+
+    // =============================================================
     //                        CHANNEL MANAGEMENT
     // =============================================================
 
@@ -155,16 +166,4 @@ interface IAccessChannelManager {
         bytes32 channelName, 
         address[] calldata members
     ) external view returns (bool[] memory results);
-
-
-    // =============================================================
-    //                           EVENTS
-    // =============================================================
-    event ChannelCreated(bytes32 indexed channelName, address indexed creator, uint256 timestamp);
-    event ChannelActivated(bytes32 indexed channelName, uint256 timestamp);
-    event ChannelDeactivated(bytes32 indexed channelName, uint256 timestamp);
-    event ChannelMemberAdded(bytes32 indexed channelName, address indexed member, uint256 newMemberCount);
-    event ChannelMemberRemoved(bytes32 indexed channelName, address indexed member, uint256 newMemberCount);
-    event ChannelMembersAdded(bytes32 indexed channelName, address[] members, uint256 newMemberCount);
-    event ChannelMembersRemoved(bytes32 indexed channelName, address[] members, uint256 newMemberCount);
 }
