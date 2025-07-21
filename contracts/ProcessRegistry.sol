@@ -295,8 +295,8 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         newProcess.owner = _msgSender();
         newProcess.channelName = processInput.channelName;
         newProcess.status = ProcessStatus.ACTIVE;
-        newProcess.createdAt = block.timestamp;
-        newProcess.lastUpdated = block.timestamp;
+        newProcess.createdAt = Utils.timestamp();
+        newProcess.lastUpdated = Utils.timestamp();
 
         // Adicionar schemas
         for (uint256 i = 0; i < processInput.schemas.length; i++) {
@@ -353,6 +353,9 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         );
     }
 
+    // =============================================================
+    //                    VALIDATION FUNCTIONS
+    // =============================================================
     function _validateProcessStatusTransition(
         ProcessStatus current, 
         ProcessStatus newStatus
@@ -364,7 +367,11 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         // INACTIVE é final state
         if (current == ProcessStatus.INACTIVE) {
             revert InvalidProcessStatusTransition(current, newStatus, "INACTIVE is final state");
-        }        
+        }     
+
+        if (current == ProcessStatus.ACTIVE && newStatus != ProcessStatus.INACTIVE) {
+            revert InvalidProcessStatusTransition(current, newStatus, "ACTIVE can only go to INACTIVE");
+        }   
     }
 
     function _validateIds(bytes32 processId, bytes32 natureId, bytes32 stageId) internal pure {
@@ -432,6 +439,9 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         }
     }
 
+    // =============================================================
+    //                    UTILITY FUNCTIONS
+    // =============================================================
     function _createProcessKey(
         bytes32 channelName, 
         bytes32 processId, 
