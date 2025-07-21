@@ -5,7 +5,6 @@ import {BaseTraceContract} from "./BaseTraceContract.sol";
 import {IProcessRegistry} from "./interfaces/IProcessRegistry.sol";
 import {ISchemaRegistry} from "./interfaces/ISchemaRegistry.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {
     PROCESS_ADMIN_ROLE,
     MAX_STRING_LENGTH,
@@ -16,12 +15,10 @@ import {Utils} from "./lib/Utils.sol";
 /**
  * @title ProcessRegistry
  * @notice Contract for managing business processes in the trace system
- * @dev Inherits from BaseTraceContract for common functionality
  */
-contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausable {
-
+contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     // =============================================================
-    //                        STORAGE
+    //                        STORAGE 
     // =============================================================
 
     /**
@@ -42,42 +39,15 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
      */
     mapping(bytes32 => mapping(bytes32 => bytes32)) private _simpleToComposite;
 
-    /**
-     * Mapping to track paused processes by channel name
-     * @dev channelName => processId => isPaused
-    */
-    mapping(bytes32 => mapping(bytes32 => bool)) private _processPaused;
-
-    // =============================================================
-    //                        MODIFIERS
-    // =============================================================
-
-    /**
-     * Modifier to check if a process is paused
-     * @param channelName Channel name
-     * @param processId Process identifier
-     */
-    modifier whenProcessNotPaused(bytes32 channelName, bytes32 processId) {
-        if (_processPaused[channelName][processId]) {
-            revert ProcessPaused(channelName, processId);
-        }
-        _;
-    }
-   
     // =============================================================
     //                       CONSTRUCTOR
     // =============================================================
 
-    /**
-     * Constructor for ProcessRegistry
-     * @param addressDiscovery_ Address of the AddressDiscovery contract
-     */
     constructor(address addressDiscovery_) 
         BaseTraceContract(addressDiscovery_) 
     {
         _grantRole(PROCESS_ADMIN_ROLE, _msgSender());
     }
-
 
     // =============================================================
     //                    PROCESS MANAGEMENT
@@ -92,10 +62,9 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
         onlyChannelMember(processInput.channelName) 
     {
 
-        _validationIds(processInput.processId, processInput.natureId, processInput.stageId);
-        _validationDescription(processInput.description);
+        _validateIds(processInput.processId, processInput.natureId, processInput.stageId);
+        _validateDescription(processInput.description);
         
-        // Create a unique key for the process
         bytes32 uniqueKey = _createProcessKey(
             processInput.channelName, 
             processInput.processId, 
@@ -103,43 +72,41 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
             processInput.stageId
         );
 
-        // Check if the process already exists
-        _validateProcessKey(
-            uniqueKey, 
-            processInput.channelName, 
-            processInput.processId, 
-            processInput.natureId, 
-            processInput.stageId
-        );
+        // Verificar unicidade
+        if (_activeProcessKeys[uniqueKey]) {
+            revert ProcessAlreadyExists(
+                processInput.channelName,
+                processInput.processId,
+                processInput.natureId,
+                processInput.stageId
+            );
+        }
 
-        // Schemas validation
         uint256 schemasLength = processInput.schemas.length;
-
-        _validateAction(processInput.action, schemasLength);
+        _validateActionRequiresSchemas(processInput.action, schemasLength);
 
         if (schemasLength > 0) {
            _validateSchemas(processInput.channelName, processInput.schemas);
         }
 
-        // Create the process
-        Process memory newProcess = _createProcess(processInput, uniqueKey);
-
-        // Storage
-         _storageNewProcess(newProcess.channelName, newProcess.processId, uniqueKey);
+        _createProcessInStorage(processInput, uniqueKey);
+        
+        _activeProcessKeys[uniqueKey] = true;
+        _simpleToComposite[processInput.channelName][processInput.processId] = uniqueKey;
      
         emit ProcessCreated(
-            newProcess.processId,
-            newProcess.natureId,
-            newProcess.stageId,
-            newProcess.owner,
-            newProcess.channelName,
-            newProcess.action,
-            newProcess.createdAt
+            processInput.processId,
+            processInput.natureId,
+            processInput.stageId,
+            _msgSender(),
+            processInput.channelName,
+            processInput.action,
+            Utils.timestamp()
         );
     }
 
     /**
-     * Change status of a process
+     * @inheritdoc IProcessRegistry
      */
     function setProcessStatus(
         bytes32 processId,
@@ -150,16 +117,16 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
     ) 
         external 
         validChannelName(channelName)
-        onlyChannelMember(channelName)
+        onlyChannelMember(channelName) 
     {
+
         _setProcessStatus(
             processId,
             natureId,
             stageId,
             channelName,
-            newStatus,
-            false
-        );
+            newStatus
+        );        
     }
 
     /**
@@ -173,39 +140,20 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
     ) 
         external
         validChannelName(channelName)
+        onlyChannelMember(channelName) 
     {
+
         _setProcessStatus(
             processId,
             natureId,
             stageId,
             channelName,
-            ProcessStatus.INACTIVE,
-            false
-        );
-    }
-
-    function inactivateProcessWithCascade(
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName,
-        bool cascadeSchemas  
-    ) 
-      external 
-      validChannelName(channelName) 
-    {
-        _setProcessStatus(
-            processId, 
-            natureId, 
-            stageId, 
-            channelName, 
-            ProcessStatus.INACTIVE, 
-            cascadeSchemas
-        );
+            ProcessStatus.INACTIVE
+        );   
     }
 
     // =============================================================
-    //                    VIEW FUNCTIONS
+    //                    VIEW FUNCTIONS 
     // =============================================================
 
     /**
@@ -221,8 +169,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
         returns (Process memory process) 
     {
         if (processId == bytes32(0)) revert InvalidProcessId();
-
-        return _getProcess(channelName, processId);
+        return _getProcessBySimpleKey(channelName, processId);
     }
 
     /**
@@ -239,10 +186,9 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
         validChannelName(channelName)
         returns (Process memory process) 
     {
-        _validationIds(processId, natureId, stageId);
-
+        _validateIds(processId, natureId, stageId);
+        
         bytes32 compositeKey = _simpleToComposite[channelName][processId];
-
         if (compositeKey == bytes32(0)) {
             revert ProcessNotFound(channelName, processId);
         }
@@ -263,104 +209,31 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
         returns (ProcessStatus status) 
     {
         if (processId == bytes32(0)) revert InvalidProcessId();
-
-        return _getProcess(channelName, processId).status;
-
+        return _getProcessBySimpleKey(channelName, processId).status;
     }
-
-    // =============================================================
-    //                    SCHEMA DEPENDENCY MANAGEMENT
-    // =============================================================
 
     /**
      * @inheritdoc IProcessRegistry
-     * @dev This function is called by the SchemaRegistry contract
-     * Pausar processo quando schema inativado (chamado off-chain via monitoring)
      */
-    function pauseProcessBySchemaIssue(
-        bytes32 channelName,
+    function isProcessActive(
         bytes32 processId,
-        string calldata reason
+        bytes32 natureId,
+        bytes32 stageId,
+        bytes32 channelName
     ) 
         external 
-        validChannelName(channelName)
-        onlyRole(PROCESS_ADMIN_ROLE) 
-    {
-        if (processId == bytes32(0)) revert InvalidProcessId();
-        
-        bytes32 compositeKey = _simpleToComposite[channelName][processId];
-        if (compositeKey == bytes32(0)) {
-            revert ProcessNotFound(channelName, processId);
-        }
-
-        _processPaused[channelName][processId] = true;
-        
-        emit ProcessPausedBySchemaIssue(
-            channelName, 
-            processId, 
-            _msgSender(), 
-            reason, 
-            Utils.timestamp()
-        );
-    }
-
-    /**
-     * @inheritdoc IProcessRegistry
-     * @dev This function is called by the SchemaRegistry contract
-     * Reativar processo quando schema corrigido/substituído
-     */
-    function resumeProcess(
-        bytes32 channelName,
-        bytes32 processId
-    ) 
-        external 
-        validChannelName(channelName)
-        onlyRole(PROCESS_ADMIN_ROLE) 
-    {
-        if (processId == bytes32(0)) revert InvalidProcessId();
-        
-        bytes32 compositeKey = _simpleToComposite[channelName][processId];
-        if (compositeKey == bytes32(0)) {
-            revert ProcessNotFound(channelName, processId);
-        }
-
-        Process storage process = _processes[channelName][compositeKey];
-
-        _validateActiveSchemas(process.schemas, channelName);
-
-        _processPaused[channelName][processId] = false;
-        
-        emit ProcessResumed(
-            channelName, 
-            processId, 
-            _msgSender(), 
-            Utils.timestamp()
-        );
-    }
-
-    /**
-     * @inheritdoc IProcessRegistry
-     * @dev This function is called by the SchemaRegistry contract
-     * Checar se processo está pausado por schema issues
-     */
-    function isProcessPausedBySchemaIssue(
-        bytes32 channelName,
-        bytes32 processId
-    ) 
-        external 
-        validChannelName(channelName)
         view 
-        returns (bool) 
+        validChannelName(channelName)
+        onlyChannelMember(channelName)
+        returns (bool active) 
     {
-        return _processPaused[channelName][processId];
+        bytes32 uniqueKey = _createProcessKey(channelName, processId, natureId, stageId);
+        return _activeProcessKeys[uniqueKey];
     }
-
-    // =============================================================
-    // FUNCTION TO BE CALLED BY PROCESS SUBMISSION
-    // =============================================================
 
     /**
      * @inheritdoc IProcessRegistry
+     * @dev Validate process for submission (useful for TransactionOrchestrator)
      */
     function validateProcessForSubmission(
         bytes32 channelName,
@@ -371,23 +244,19 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
         view 
         returns (bool isValid, string memory reason) 
     {
-        // 1. Check se processo existe
+        // Check se processo existe
         bytes32 compositeKey = _simpleToComposite[channelName][processId];
         if (compositeKey == bytes32(0)) {
             return (false, "Process not found");
         }
 
-        // 2. Check se processo está ativo
+        // Check se processo está ativo
         Process storage process = _processes[channelName][compositeKey];
         if (process.status != ProcessStatus.ACTIVE) {
             return (false, "Process not active");
         }
-        // 3. Check se processo não está pausado por schema issues
-        if (_processPaused[channelName][processId]) {
-            return (false, "Process paused due to schema issues");
-        }
 
-        // 4. Validar schemas ainda ativos 
+        // Validar schemas ainda ativos (external call for try/catch)
         try this._validateSchemasForSubmission(channelName, process.schemas) {
             return (true, "Process valid for submission");
         } catch Error(string memory error) {
@@ -397,6 +266,10 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
         }
     }
 
+    /**
+     * @inheritdoc IProcessRegistry
+     * @dev External function for schema validation (enables try/catch)
+     */
     function _validateSchemasForSubmission(
         bytes32 channelName,
         SchemaReference[] memory schemas
@@ -405,53 +278,116 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
     }
 
     // =============================================================
-    //                    INTERNAL VALIDATION
+    //                    INTERNAL FUNCTIONS 
     // =============================================================
-    function _validationIds(bytes32 processId, bytes32 natureId, bytes32 stageId) internal pure {
+
+    function _createProcessInStorage(
+        ProcessInput calldata processInput, 
+        bytes32 uniqueKey
+    ) internal {
+        Process storage newProcess = _processes[processInput.channelName][uniqueKey];
+
+        newProcess.processId = processInput.processId;
+        newProcess.natureId = processInput.natureId;
+        newProcess.stageId = processInput.stageId;
+        newProcess.action = processInput.action;
+        newProcess.description = processInput.description;
+        newProcess.owner = _msgSender();
+        newProcess.channelName = processInput.channelName;
+        newProcess.status = ProcessStatus.ACTIVE;
+        newProcess.createdAt = block.timestamp;
+        newProcess.lastUpdated = block.timestamp;
+
+        // Adicionar schemas
+        for (uint256 i = 0; i < processInput.schemas.length; i++) {
+            newProcess.schemas.push(processInput.schemas[i]);
+        }
+    }
+
+    function _setProcessStatus(
+        bytes32 processId,
+        bytes32 natureId,
+        bytes32 stageId,
+        bytes32 channelName,
+        ProcessStatus newStatus
+    ) internal {
+        _validateIds(processId, natureId, stageId);
+        
+        bytes32 uniqueKey = _createProcessKey(
+            channelName, 
+            processId, 
+            natureId, 
+            stageId
+        );
+        
+        // Verificar se processo existe
+        if (!_activeProcessKeys[uniqueKey] && _simpleToComposite[channelName][processId] == bytes32(0)) {
+            revert ProcessNotFound(channelName, processId);
+        }
+
+        Process storage process = _processes[channelName][uniqueKey];
+
+        // Verificar ownership
+        if (process.owner != _msgSender()) {
+            revert NotProcessOwner(channelName, processId, _msgSender());
+        }
+
+        ProcessStatus oldStatus = process.status;
+        
+        _validateProcessStatusTransition(oldStatus, newStatus);
+
+        // Atualizar status
+        process.status = newStatus;
+        process.lastUpdated = Utils.timestamp();
+        
+        // Atualizar index de ativos
+        _activeProcessKeys[uniqueKey] = (newStatus == ProcessStatus.ACTIVE);
+
+        emit ProcessStatusChanged(
+            processId, 
+            channelName, 
+            oldStatus, 
+            newStatus, 
+            _msgSender(), 
+            Utils.timestamp()
+        );
+    }
+
+    function _validateProcessStatusTransition(
+        ProcessStatus current, 
+        ProcessStatus newStatus
+    ) internal pure {
+        if (current == newStatus) {
+            revert InvalidProcessStatusTransition(current, newStatus, "Status unchanged");
+        }
+        
+        // INACTIVE é final state
+        if (current == ProcessStatus.INACTIVE) {
+            revert InvalidProcessStatusTransition(current, newStatus, "INACTIVE is final state");
+        }        
+    }
+
+    function _validateIds(bytes32 processId, bytes32 natureId, bytes32 stageId) internal pure {
         if (processId == bytes32(0)) revert InvalidProcessId();
         if (natureId == bytes32(0)) revert InvalidNatureId();
         if (stageId == bytes32(0)) revert InvalidStageId();
     }
 
-    function _validationDescription(string calldata description) internal pure {
+    function _validateDescription(string calldata description) internal pure {
         if (bytes(description).length > MAX_STRING_LENGTH) revert DescriptionTooLong();
     }
 
-    function _validateProcessKey(
-        bytes32 uniqueKey, 
-        bytes32 channelName, 
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId
-    )
-        internal 
-        view 
-    {
-        if (_activeProcessKeys[uniqueKey]) {
-            revert ProcessAlreadyExists(
-                channelName,
-                processId,
-                natureId,
-                stageId
-            );
-        }
-    }
-
-    function _validateAction(ProcessAction action, uint256 schemasLength) internal pure {
+    function _validateActionRequiresSchemas(ProcessAction action, uint256 schemasLength) internal pure {
         if (action == ProcessAction.CREATE_ASSET || 
             action == ProcessAction.CREATE_DOCUMENT || 
-            action == ProcessAction.UPDATE_ASSET) 
-        {
+            action == ProcessAction.UPDATE_ASSET) {
             if (schemasLength == 0) {
                 revert SchemasRequiredForAction(action);
             }
         }        
     }
 
-    function _validateSchemas(
-        bytes32 channelName, 
-        SchemaReference[] calldata schemas
-    ) internal view {
+    function _validateSchemas(bytes32 channelName, SchemaReference[] calldata schemas) internal view {
         ISchemaRegistry schemaRegistry = ISchemaRegistry(
             _getAddressDiscovery().getContractAddress(SCHEMA_REGISTRY)
         );
@@ -470,40 +406,15 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
                 channelName, schemas[i].schemaId, schemas[i].version
             ) returns (ISchemaRegistry.Schema memory schema) {
                 if (schema.status == ISchemaRegistry.SchemaStatus.INACTIVE) {
-                    revert SchemaNotActiveInChannel(
-                        channelName, 
-                        schemas[i].schemaId, 
-                        schemas[i].version
-                    );
+                    revert SchemaNotActiveInChannel(channelName, schemas[i].schemaId, schemas[i].version);
                 }
             } catch {
-                revert SchemaNotFoundInChannel(
-                    channelName, 
-                    schemas[i].schemaId, 
-                    schemas[i].version
-                );
+                revert SchemaNotFoundInChannel(channelName, schemas[i].schemaId, schemas[i].version);
             }
         }
     }
 
-    function _validateProcessStatusTransition(
-        ProcessStatus current, 
-        ProcessStatus newStatus
-    ) internal pure {
-        
-        if (current == ProcessStatus.INACTIVE) {
-            revert InvalidProcessStatusTransition(current, newStatus, "INACTIVE is final state");
-        }
-        
-        if (current == ProcessStatus.ACTIVE && newStatus != ProcessStatus.INACTIVE) {
-            revert InvalidProcessStatusTransition(current, newStatus, "ACTIVE can only go to INACTIVE");
-        }    
-    }
-
-    function _validateActiveSchemas(
-        SchemaReference[] memory schemas,
-        bytes32 channelName
-    ) internal view {
+    function _validateActiveSchemas(SchemaReference[] memory schemas, bytes32 channelName) internal view {
         ISchemaRegistry schemaRegistry = ISchemaRegistry(
             _getAddressDiscovery().getContractAddress(SCHEMA_REGISTRY)
         );
@@ -513,25 +424,13 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
                 channelName, schemas[i].schemaId, schemas[i].version
             ) returns (ISchemaRegistry.Schema memory schema) {
                 if (schema.status == ISchemaRegistry.SchemaStatus.INACTIVE) {
-                    revert SchemaNotActiveInChannel(
-                        channelName, 
-                        schemas[i].schemaId, 
-                        schemas[i].version
-                    );
+                    revert SchemaNotActiveInChannel(channelName, schemas[i].schemaId, schemas[i].version);
                 }
             } catch {
-                revert SchemaNotFoundInChannel(
-                    channelName, 
-                    schemas[i].schemaId, 
-                    schemas[i].version
-                );
+                revert SchemaNotFoundInChannel(channelName, schemas[i].schemaId, schemas[i].version);
             }
         }
     }
-
-    // =============================================================
-    //                    INTERNAL OPERATIONS
-    // =============================================================
 
     function _createProcessKey(
         bytes32 channelName, 
@@ -539,172 +438,14 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
         bytes32 natureId, 
         bytes32 stageId
     ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(
-                channelName,
-                processId,
-                natureId,
-                stageId
-            )
-        );
+        return keccak256(abi.encodePacked(channelName, processId, natureId, stageId));
     }
 
-    function _createProcess(
-        ProcessInput memory processInput, 
-        bytes32 uniqueKey
-        ) internal 
-          returns (Process memory)
-    {
-        Process storage newProcess = _processes[processInput.channelName][uniqueKey];
-
-        newProcess.processId = processInput.processId;
-        newProcess.natureId = processInput.natureId;
-        newProcess.stageId = processInput.stageId;
-        newProcess.action = processInput.action;
-        newProcess.description = processInput.description;
-        newProcess.owner = _msgSender();
-        newProcess.channelName = processInput.channelName;
-        newProcess.status = ProcessStatus.ACTIVE;
-
-        uint256 nowTimestamp = Utils.timestamp();
-        newProcess.createdAt = nowTimestamp;
-        newProcess.lastUpdated = nowTimestamp;
-
-        uint256 schemasLength = processInput.schemas.length;
-        if (schemasLength > 0) {
-            for (uint256 i = 0; i < schemasLength;) {
-                newProcess.schemas.push(processInput.schemas[i]);
-                unchecked { ++i; }
-            }
-        }
-
-        return newProcess;
-    }
-
-    function _setProcessStatus(
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName,
-        ProcessStatus newStatus,
-        bool cascadeSchemas
-    ) internal 
-    {
-        bytes32 uniqueKey = keccak256(
-            abi.encodePacked(
-                channelName, 
-                processId, 
-                natureId, 
-                stageId
-            )
-        );
-
+    function _getProcessBySimpleKey(bytes32 channelName, bytes32 processId) internal view returns (Process memory) {
         bytes32 compositeKey = _simpleToComposite[channelName][processId];
         if (compositeKey == bytes32(0)) {
             revert ProcessNotFound(channelName, processId);
         }
-
-        Process storage process = _processes[channelName][uniqueKey];
-
-        if (process.owner != _msgSender()) {
-            revert NotProcessOwner(channelName, processId,  _msgSender());
-        }
-
-        ProcessStatus oldStatus = process.status;
-
-        _validateProcessStatusTransition(oldStatus, newStatus);
-
-        process.status = newStatus;
-        process.lastUpdated = Utils.timestamp();
-        
-        _activeProcessKeys[uniqueKey] = (newStatus == ProcessStatus.ACTIVE);
-
-        // CASCADE SCHEMA INACTIVATION
-        if (newStatus == ProcessStatus.INACTIVE && 
-            oldStatus == ProcessStatus.ACTIVE &&
-            cascadeSchemas) {
-            _inactivateAssociatedSchemas(process, channelName);
-        }
-
-        emit ProcessStatusChanged(
-            processId, 
-            channelName, 
-            oldStatus, 
-            newStatus, 
-            _msgSender(), 
-            Utils.timestamp()
-        );
-    }
-
-    function _inactivateAssociatedSchemas(Process storage process, bytes32 channelName) internal {
-        
-        // Get SchemaRegistry contract
-        ISchemaRegistry schemaRegistry = ISchemaRegistry(
-            _getAddressDiscovery().getContractAddress(SCHEMA_REGISTRY)
-        );
-        
-        // Inactivate all associated schemas
-        uint256 schemasLength = process.schemas.length;
-        for (uint256 i = 0; i < schemasLength; i++) {
-            SchemaReference storage schemaRef = process.schemas[i];
-            
-            try schemaRegistry.setSchemaStatus(
-                schemaRef.schemaId,
-                schemaRef.version,
-                channelName,
-                ISchemaRegistry.SchemaStatus.INACTIVE
-            ) {
-                // Schema successfully inactivated
-                emit ProcessSchemaInactivated(
-                    process.processId,
-                    schemaRef.schemaId,
-                    schemaRef.version,
-                    channelName,
-                    true,
-                    "Successfully inactivated"
-                );
-            } catch Error(string memory reason) {
-                emit ProcessSchemaInactivated(
-                    process.processId,
-                    schemaRef.schemaId,
-                    schemaRef.version,
-                    channelName,
-                    false,
-                    reason
-                );
-            } catch {
-                emit ProcessSchemaInactivated(
-                    process.processId,
-                    schemaRef.schemaId,
-                    schemaRef.version,
-                    channelName,
-                    false,
-                    "Unknown error"
-                );
-            }
-        }
-    }
-
-    function _storageNewProcess(
-        bytes32 channelName, 
-        bytes32 processId, 
-        bytes32 uniqueKey
-    ) internal 
-    {
-        _activeProcessKeys[uniqueKey] = true;
-        _simpleToComposite[channelName][processId] = uniqueKey;
-    }
-
-    function _getProcess(
-        bytes32 channelName,
-        bytes32 processId
-    ) internal view returns (Process memory process) {
-        bytes32 compositeKey = _simpleToComposite[channelName][processId];
-
-        if (compositeKey == bytes32(0)) {
-            revert ProcessNotFound(channelName, processId);
-        }
-
         return _processes[channelName][compositeKey];
     }
 
@@ -712,50 +453,29 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry, Pausab
     //                    ACCESS CONTROL HELPERS
     // =============================================================
 
-    /**
-     * Function to add a new process admin.
-     * @param newProcessAdmin Address of the new process admin
-     */
     function addProcessAdmin(address newProcessAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newProcessAdmin == address(0)) revert InvalidAddress(newProcessAdmin);
         _grantRole(PROCESS_ADMIN_ROLE, newProcessAdmin);
     }
 
-    /**
-     * Function to remove a process admin.
-     * @param addressProcessAdmin Address of process admin to remove
-     */
     function removeProcessAdmin(address addressProcessAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (addressProcessAdmin == address(0)) revert InvalidAddress(addressProcessAdmin);
         _revokeRole(PROCESS_ADMIN_ROLE, addressProcessAdmin);
     }
 
-
     // =============================================================
     //                    IMPLEMENTATION REQUIREMENTS
     // =============================================================
 
-    /**
-     * Set the address discovery contract
-     * @param discovery Address of the discovery contract
-     */
     function setAddressDiscovery(address discovery) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setAddressDiscovery(discovery);
     }
 
-    /**
-     * Get the address discovery contract
-     * @return discovery Address of the discovery contract
-     */
     function getAddressDiscovery() external view returns (address) {
         return address(_getAddressDiscovery());
     }
 
-    /**
-     * @inheritdoc BaseTraceContract
-     */
     function getVersion() external pure override returns (string memory) {
-        return "1.0.0";
+        return "1.0.0"; 
     }   
-
 }

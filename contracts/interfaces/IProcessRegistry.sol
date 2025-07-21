@@ -75,45 +75,12 @@ interface IProcessRegistry {
         uint256 timestamp
     );
 
-    event ProcessInactivated(
-        bytes32 indexed processId,
-        bytes32 indexed natureId,
-        bytes32 indexed stageId,
-        address owner,
-        bytes32 channelName,
-        uint256 timestamp
-    );
-
     event ProcessStatusChanged(
         bytes32 indexed processId,
         bytes32 indexed channelName,
         ProcessStatus oldStatus,
         ProcessStatus newStatus,
         address updatedBy,
-        uint256 timestamp
-    );
-
-    event ProcessSchemaInactivated(
-        bytes32 indexed processId,
-        bytes32 indexed schemaId,
-        uint256 indexed version,
-        bytes32 channelName,
-        bool success,
-        string reason
-    );
-
-    event ProcessPausedBySchemaIssue(
-        bytes32 indexed channelName,
-        bytes32 indexed processId,
-        address indexed pausedBy,
-        string reason,
-        uint256 timestamp
-    );
-    
-    event ProcessResumed(
-        bytes32 indexed channelName,
-        bytes32 indexed processId,
-        address indexed resumedBy,
         uint256 timestamp
     );
 
@@ -134,8 +101,7 @@ interface IProcessRegistry {
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
     error DescriptionTooLong();
     error InvalidProcessStatusTransition(ProcessStatus current, ProcessStatus newStatus, string reason);
-    error ProcessPaused(bytes32 channelName, bytes32 processId);
-   
+
     // =============================================================
     //                    PROCESS MANAGEMENT
     // =============================================================
@@ -173,22 +139,6 @@ interface IProcessRegistry {
         bytes32 natureId,
         bytes32 stageId,
         bytes32 channelName
-    ) external;
-
-    /**
-     * Inactivates an existing process with cascade of schemas
-     * @param processId Process identifier
-     * @param natureId Nature identifier
-     * @param stageId Stage identifier
-     * @param channelName Channel name
-     * @param cascadeSchemas Boolean to indicate if schemas should be cascaded
-     */
-    function inactivateProcessWithCascade(
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName,
-        bool cascadeSchemas  
     ) external;
 
     // =============================================================
@@ -232,41 +182,20 @@ interface IProcessRegistry {
         bytes32 channelName
     ) external view returns (ProcessStatus status);
 
-    // =============================================================
-    //                    SCHEMA DEPENDENCY MANAGEMENT
-    // =============================================================
-
     /**
-     * Pauses a process by schema issue
-     * @param channelName Channel name
+     * Checks if a process exists and is active
      * @param processId Process identifier
-     * @param reason Reason for pausing the process
+     * @param natureId Nature identifier
+     * @param stageId Stage identifier
+     * @param channelName Channel name
+     * @return active Whether the process is active
      */
-    function pauseProcessBySchemaIssue(
-        bytes32 channelName,
+    function isProcessActive(
         bytes32 processId,
-        string calldata reason
-    ) external;
-
-    /**
-     * Resumes a paused process by schema issue
-     * @param channelName Channel name
-     * @param processId Process identifier
-     */
-    function resumeProcess(
-        bytes32 channelName,
-        bytes32 processId
-    ) external; 
-
-    /**
-     * Verifies if a process is paused by schema issue
-     * @param channelName Channel name
-     * @param processId Process identifier
-    */
-    function isProcessPausedBySchemaIssue(
-        bytes32 channelName,
-        bytes32 processId
-    ) external view returns (bool);
+        bytes32 natureId,
+        bytes32 stageId,
+        bytes32 channelName
+    ) external view returns (bool active);
 
     // =============================================================
     // FUNCTION TO BE CALLED BY PROCESS SUBMISSION
@@ -283,5 +212,15 @@ interface IProcessRegistry {
         bytes32 channelName,
         bytes32 processId
     ) external view returns (bool isValid, string memory reason);
+
+    /**
+     * External function for schema validation (enables try/catch)
+     * @param channelName Channel name
+     * @param schemas Array of schema references to validate
+     */
+    function _validateSchemasForSubmission(
+        bytes32 channelName,
+        SchemaReference[] memory schemas
+    ) external view;
      
 }
