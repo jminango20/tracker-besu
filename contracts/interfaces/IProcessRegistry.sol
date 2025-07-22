@@ -101,6 +101,7 @@ interface IProcessRegistry {
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
     error DescriptionTooLong();
     error InvalidProcessStatusTransition(ProcessStatus current, ProcessStatus newStatus, string reason);
+    error FunctionCallFailed();
 
     // =============================================================
     //                    PROCESS MANAGEMENT
@@ -190,6 +191,18 @@ interface IProcessRegistry {
         bytes32 stageId
     ) external view returns (bool active);
 
+    /**
+     * Get all processes with a specific processId in a channel
+     * @dev Useful when you know processId but not nature/stage combinations
+     * @param processId The process identifier
+     * @param channelName The channel name
+     * @return processes Array of all processes with this processId
+     */
+    function getProcessesByProcessId(
+        bytes32 processId, 
+        bytes32 channelName
+    ) external view returns (Process[] memory processes);
+
     // =============================================================
     // FUNCTION TO BE CALLED BY PROCESS SUBMISSION
     // =============================================================
@@ -209,15 +222,4 @@ interface IProcessRegistry {
         bytes32 natureId,
         bytes32 stageId
     ) external view returns (bool isValid, string memory reason);
-
-    /**
-     * External function for schema validation (enables try/catch)
-     * @param channelName Channel name
-     * @param schemas Array of schema references to validate
-     */
-    function _validateSchemasForSubmission(
-        bytes32 channelName,
-        SchemaReference[] memory schemas
-    ) external view;
-     
 }

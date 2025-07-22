@@ -39,6 +39,12 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
      */
     mapping(bytes32 => bool) private _processesExists;
 
+    /**
+     * Track composite keys by simple processId for lookups
+     * @dev channelName => processId => compositeKey[]
+     */
+    mapping(bytes32 => mapping(bytes32 => bytes32[])) private _processIdToCompositeKeys;
+
     // =============================================================
     //                       CONSTRUCTOR
     // =============================================================
@@ -93,6 +99,9 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         
         _activeProcessKeys[compositeKey] = true;
         _processesExists[compositeKey] = true;
+ 
+        _processIdToCompositeKeys[processInput.channelName][processInput.processId].push(compositeKey);
+ 
      
         emit ProcessCreated(
             processInput.processId,
@@ -248,6 +257,34 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
 
     /**
      * @inheritdoc IProcessRegistry
+     */
+    function getProcessesByProcessId(
+        bytes32 processId, 
+        bytes32 channelName
+    ) 
+        external 
+        view 
+        validChannelName(channelName)
+        returns (Process[] memory processes) 
+    {
+        if (processId == bytes32(0)) revert InvalidProcessId();
+        
+        bytes32[] memory compositeKeys = _processIdToCompositeKeys[channelName][processId];
+        uint256 length = compositeKeys.length;
+        
+        if (length == 0) {
+            revert ProcessNotFound(channelName, processId);
+        }
+        
+        processes = new Process[](length);
+        
+        for (uint256 i = 0; i < length; i++) {
+            processes[i] = _processes[channelName][compositeKeys[i]];
+        }
+    }
+
+    /**
+     * @inheritdoc IProcessRegistry
      * @dev Validate process for submission (useful for TransactionOrchestrator)
      */
     function validateProcessForSubmission(
@@ -283,7 +320,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         }
 
         // Validar schemas ainda ativos (external call for try/catch)
-        try this._validateSchemasForSubmission(channelName, process.schemas) {
+        try this._validateSchemasForSubmission(channelName, process.schemas) returns (bool) {
             return (true, "Process valid for submission");
         } catch Error(string memory error) {
             return (false, error);
@@ -293,14 +330,15 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     }
 
     /**
-     * @inheritdoc IProcessRegistry
      * @dev External function for schema validation (enables try/catch)
      */
     function _validateSchemasForSubmission(
         bytes32 channelName,
         SchemaReference[] memory schemas
-    ) external view {
+    ) external view returns (bool) {
+        if (msg.sender != address(this)) revert FunctionCallFailed();
         _validateActiveSchemas(schemas, channelName);
+        return true;
     }
 
     // =============================================================
