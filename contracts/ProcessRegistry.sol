@@ -34,10 +34,10 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     mapping(bytes32 => bool) private _activeProcessKeys;
 
     /**
-     * Mapping to track process existence by channel name
-     * @dev channelName => processId => compositeKey
+     * Track processes existence for uniqueness validation
+     * @dev compositeKey => isActive 
      */
-    mapping(bytes32 => mapping(bytes32 => bytes32)) private _simpleToComposite;
+    mapping(bytes32 => bool) private _processesExists;
 
     // =============================================================
     //                       CONSTRUCTOR
@@ -65,7 +65,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         _validateIds(processInput.processId, processInput.natureId, processInput.stageId);
         _validateDescription(processInput.description);
         
-        bytes32 uniqueKey = _createProcessKey(
+        bytes32 compositeKey = _createProcessKey(
             processInput.channelName, 
             processInput.processId, 
             processInput.natureId, 
@@ -73,7 +73,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         );
 
         // Verificar unicidade
-        if (_activeProcessKeys[uniqueKey]) {
+        if (_processesExists[compositeKey]) {
             revert ProcessAlreadyExists(
                 processInput.channelName,
                 processInput.processId,
@@ -89,10 +89,10 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
            _validateSchemas(processInput.channelName, processInput.schemas);
         }
 
-        _createProcessInStorage(processInput, uniqueKey);
+        _createProcessInStorage(processInput, compositeKey);
         
-        _activeProcessKeys[uniqueKey] = true;
-        _simpleToComposite[processInput.channelName][processInput.processId] = uniqueKey;
+        _activeProcessKeys[compositeKey] = true;
+        _processesExists[compositeKey] = true;
      
         emit ProcessCreated(
             processInput.processId,
@@ -109,10 +109,10 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
      * @inheritdoc IProcessRegistry
      */
     function setProcessStatus(
+        bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
         bytes32 stageId,
-        bytes32 channelName,
         ProcessStatus newStatus
     ) 
         external 
@@ -121,10 +121,10 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     {
 
         _setProcessStatus(
+            channelName,
             processId,
             natureId,
             stageId,
-            channelName,
             newStatus
         );        
     }
@@ -133,10 +133,10 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
      * @inheritdoc IProcessRegistry
      */
     function inactivateProcess(
+     bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName
+        bytes32 stageId
     ) 
         external
         validChannelName(channelName)
@@ -144,10 +144,10 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     {
 
         _setProcessStatus(
+            channelName,
             processId,
             natureId,
             stageId,
-            channelName,
             ProcessStatus.INACTIVE
         );   
     }
@@ -159,27 +159,11 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     /**
      * @inheritdoc IProcessRegistry
      */
-    function getProcessById(
-        bytes32 processId,
-        bytes32 channelName
-    ) 
-        external 
-        view 
-        validChannelName(channelName)
-        returns (Process memory process) 
-    {
-        if (processId == bytes32(0)) revert InvalidProcessId();
-        return _getProcessBySimpleKey(channelName, processId);
-    }
-
-    /**
-     * @inheritdoc IProcessRegistry
-     */
     function getProcess(
+     bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName
+        bytes32 stageId
     ) 
         external 
         view 
@@ -188,8 +172,14 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     {
         _validateIds(processId, natureId, stageId);
         
-        bytes32 compositeKey = _simpleToComposite[channelName][processId];
-        if (compositeKey == bytes32(0)) {
+        bytes32 compositeKey = _createProcessKey(
+            channelName, 
+            processId, 
+            natureId, 
+            stageId
+        );
+        
+        if (!_processesExists[compositeKey]) {
             revert ProcessNotFound(channelName, processId);
         }
 
@@ -200,35 +190,60 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
      * @inheritdoc IProcessRegistry
      */
     function getProcessStatus(
+        bytes32 channelName,
         bytes32 processId,
-        bytes32 channelName
+        bytes32 natureId,
+        bytes32 stageId
     ) 
         external 
         view 
         validChannelName(channelName)
         returns (ProcessStatus status) 
     {
-        if (processId == bytes32(0)) revert InvalidProcessId();
-        return _getProcessBySimpleKey(channelName, processId).status;
+        _validateIds(processId, natureId, stageId); 
+        
+        bytes32 compositeKey = _createProcessKey(
+            channelName,
+            processId,
+            natureId,
+            stageId
+        );
+
+        if (!_processesExists[compositeKey]) {
+            revert ProcessNotFound(channelName, processId);
+        }
+
+        return _processes[channelName][compositeKey].status;        
     }
 
     /**
      * @inheritdoc IProcessRegistry
      */
     function isProcessActive(
+     bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName
+        bytes32 stageId
     ) 
         external 
         view 
         validChannelName(channelName)
-        onlyChannelMember(channelName)
         returns (bool active) 
     {
-        bytes32 uniqueKey = _createProcessKey(channelName, processId, natureId, stageId);
-        return _activeProcessKeys[uniqueKey];
+        _validateIds(processId, natureId, stageId);
+
+        bytes32 compositeKey = _createProcessKey(
+            channelName, 
+            processId, 
+            natureId, 
+            stageId
+        );
+
+        if (!_processesExists[compositeKey]) {
+            revert ProcessNotFound(channelName, processId);
+        }
+
+        return _activeProcessKeys[compositeKey];
     }
 
     /**
@@ -236,17 +251,28 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
      * @dev Validate process for submission (useful for TransactionOrchestrator)
      */
     function validateProcessForSubmission(
-        bytes32 channelName,
-        bytes32 processId
+     bytes32 channelName,
+        bytes32 processId,
+        bytes32 natureId,
+        bytes32 stageId
     ) 
         external 
         validChannelName(channelName)
         view 
         returns (bool isValid, string memory reason) 
     {
+
+        _validateIds(processId, natureId, stageId);
+
         // Check se processo existe
-        bytes32 compositeKey = _simpleToComposite[channelName][processId];
-        if (compositeKey == bytes32(0)) {
+        bytes32 compositeKey = _createProcessKey(
+            channelName, 
+            processId, 
+            natureId, 
+            stageId
+        );
+        
+        if (!_processesExists[compositeKey]) {
             return (false, "Process not found");
         }
 
@@ -305,27 +331,27 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
     }
 
     function _setProcessStatus(
+        bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
         bytes32 stageId,
-        bytes32 channelName,
         ProcessStatus newStatus
     ) internal {
         _validateIds(processId, natureId, stageId);
         
-        bytes32 uniqueKey = _createProcessKey(
-            channelName, 
+        bytes32 compositeKey = _createProcessKey(
+            channelName,
             processId, 
             natureId, 
             stageId
         );
         
         // Verificar se processo existe
-        if (!_activeProcessKeys[uniqueKey] && _simpleToComposite[channelName][processId] == bytes32(0)) {
+        if (!_processesExists[compositeKey]) {
             revert ProcessNotFound(channelName, processId);
         }
 
-        Process storage process = _processes[channelName][uniqueKey];
+        Process storage process = _processes[channelName][compositeKey];
 
         // Verificar ownership
         if (process.owner != _msgSender()) {
@@ -341,7 +367,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         process.lastUpdated = Utils.timestamp();
         
         // Atualizar index de ativos
-        _activeProcessKeys[uniqueKey] = (newStatus == ProcessStatus.ACTIVE);
+        _activeProcessKeys[compositeKey] = (newStatus == ProcessStatus.ACTIVE);
 
         emit ProcessStatusChanged(
             processId, 
@@ -448,15 +474,14 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         bytes32 natureId, 
         bytes32 stageId
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(channelName, processId, natureId, stageId));
-    }
-
-    function _getProcessBySimpleKey(bytes32 channelName, bytes32 processId) internal view returns (Process memory) {
-        bytes32 compositeKey = _simpleToComposite[channelName][processId];
-        if (compositeKey == bytes32(0)) {
-            revert ProcessNotFound(channelName, processId);
-        }
-        return _processes[channelName][compositeKey];
+        return keccak256(
+            abi.encodePacked(
+                channelName, 
+                processId, 
+                natureId, 
+                stageId
+                )
+            );
     }
 
     // =============================================================

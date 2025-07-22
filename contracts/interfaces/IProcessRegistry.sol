@@ -113,17 +113,17 @@ interface IProcessRegistry {
     function createProcess(ProcessInput calldata processInput) external;
     /**
      * Set process status 
+     * @param channelName Channel name
      * @param processId Process identifier
      * @param natureId Nature identifier
      * @param stageId Stage identifier
-     * @param channelName Channel name
      * @param newStatus New status to set
      */
     function setProcessStatus(
+        bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
         bytes32 stageId,
-        bytes32 channelName,
         ProcessStatus newStatus
     ) external;
 
@@ -135,66 +135,59 @@ interface IProcessRegistry {
      * @param channelName Channel name
      */
     function inactivateProcess(
+        bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName
+        bytes32 stageId
     ) external;
 
     // =============================================================
     //                    VIEW FUNCTIONS
     // =============================================================
-    
-    /**
-     * Get process by simple ID
-     * @param processId Process identifier
-     * @param channelName Channel name
-     * @return process The process data
-     */
-    function getProcessById(
-        bytes32 processId,
-        bytes32 channelName
-    ) external view returns (Process memory process);
 
     /**
      * Gets a specific process (full compatibility with Fabric)
+     * @param channelName Channel name
      * @param processId Process identifier
      * @param natureId Nature identifier
      * @param stageId Stage identifier
-     * @param channelName Channel name
      * @return process The process data
      */
     function getProcess(
+        bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName
+        bytes32 stageId
     ) external view returns (Process memory process);
 
     /**
      * Get process status quickly
-     * @param processId Process identifier
      * @param channelName Channel name
+     * @param processId Process identifier
+     * @param natureId Nature identifier
+     * @param stageId Stage identifier
      * @return status Current process status
      */
     function getProcessStatus(
+        bytes32 channelName,
         bytes32 processId,
-        bytes32 channelName
+        bytes32 natureId,
+        bytes32 stageId
     ) external view returns (ProcessStatus status);
 
     /**
      * Checks if a process exists and is active
+     * @param channelName Channel name
      * @param processId Process identifier
      * @param natureId Nature identifier
      * @param stageId Stage identifier
-     * @param channelName Channel name
      * @return active Whether the process is active
      */
     function isProcessActive(
+        bytes32 channelName,
         bytes32 processId,
         bytes32 natureId,
-        bytes32 stageId,
-        bytes32 channelName
+        bytes32 stageId
     ) external view returns (bool active);
 
     // =============================================================
@@ -205,12 +198,16 @@ interface IProcessRegistry {
      * Validates if a process is valid for submission
      * @param channelName Channel name
      * @param processId Process identifier
+     * @param natureId Nature identifier
+     * @param stageId Stage identifier
      * @return isValid Boolean indicating if the process is valid for submission
      * @return reason Reason for the process not being valid for submission
      */
     function validateProcessForSubmission(
         bytes32 channelName,
-        bytes32 processId
+        bytes32 processId,
+        bytes32 natureId,
+        bytes32 stageId
     ) external view returns (bool isValid, string memory reason);
 
     /**
