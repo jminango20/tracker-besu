@@ -97,10 +97,8 @@ interface ISchemaRegistry {
     error SchemaAlreadyExistsCannotRecreate(bytes32 channelName, bytes32 schemaId);
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId);
     error SchemaVersionNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error SchemaHasNoActiveVersion(bytes32 channelName, bytes32 schemaId);
     error SchemaNotActive(bytes32 channelName, bytes32 schemaId, SchemaStatus status);
     error SchemaAlreadyInactive(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error SchemaNotDeprecated(bytes32 channelName, bytes32 schemaId, uint256 version);
     error NoActiveSchemaVersion(bytes32 channelName, bytes32 schemaId);
     error NotSchemaOwner(bytes32 channelName, bytes32 schemaId, address owner);
     error InvalidStatusTransition(SchemaStatus current, SchemaStatus newStatus);
