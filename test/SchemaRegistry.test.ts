@@ -15,7 +15,7 @@ import {
 } from "./utils/index";
 import { schemaInput, schemaUpdateInput } from "./utils/index";
 
-describe.only("SchemaRegistry test", function () {
+describe("SchemaRegistry test", function () {
   let accounts: any;
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
