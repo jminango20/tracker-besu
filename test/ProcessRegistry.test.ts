@@ -733,6 +733,39 @@ describe("ProcessRegistry test", function () {
           .withArgs(CHANNEL_1, NON_EXISTENT_PROCESS);
       });
     });
+
+    describe("getProcessesByProcessId", function () {
+      it("Should return all processes with same processId", async function () {
+        const { processRegistry, processInputWithSchemas } = await loadFixture(deployProcessRegistry);
+
+        // Create multiple processes with same processId
+        await processRegistry.connect(member1).createProcess(processInputWithSchemas);
+        
+        const processWithDifferentNature = {
+          ...processInputWithSchemas,
+          natureId: NATURE_2
+        };
+        await processRegistry.connect(member1).createProcess(processWithDifferentNature);
+
+        const processes = await processRegistry.getProcessesByProcessId(
+          processInputWithSchemas.processId,
+          processInputWithSchemas.channelName
+        );
+
+        expect(processes.length).to.equal(2);
+        expect(processes[0].processId).to.equal(processInputWithSchemas.processId);
+        expect(processes[1].processId).to.equal(processInputWithSchemas.processId);
+        expect(processes[0].natureId).to.not.equal(processes[1].natureId);
+      });
+
+      it("Should revert for non-existent processId", async function () {
+        const { processRegistry } = await loadFixture(deployProcessRegistry);
+
+        await expect(processRegistry.getProcessesByProcessId(NON_EXISTENT_PROCESS, CHANNEL_1))
+          .to.be.revertedWithCustomError(processRegistry, "ProcessNotFound")
+          .withArgs(CHANNEL_1, NON_EXISTENT_PROCESS);
+      });
+    });
   });
 
   describe("validateProcessForSubmission", function () {
@@ -804,6 +837,29 @@ describe("ProcessRegistry test", function () {
 
       expect(isValid).to.be.false;
       expect(reason).to.include("Schema validation failed");
+    });
+
+    it("Should validate process without external self-call", async function () {
+      const { processRegistry, processInputWithSchemas } = await loadFixture(deployProcessRegistry);
+      
+      await processRegistry.connect(member1).createProcess(processInputWithSchemas);
+
+      const [isValid, reason] = await processRegistry.validateProcessForSubmission(
+        processInputWithSchemas.channelName,
+        processInputWithSchemas.processId,
+        processInputWithSchemas.natureId,
+        processInputWithSchemas.stageId
+      );
+
+      expect(isValid).to.be.true;
+      expect(reason).to.equal("Process valid for submission");
+    });
+
+    it("Should prevent external calls to internal validation", async function () {
+      const { processRegistry } = await loadFixture(deployProcessRegistry);
+
+      await expect(processRegistry._validateSchemasForSubmission(CHANNEL_1, []))
+        .to.be.revertedWithCustomError(processRegistry, "FunctionCallFailed");
     });
   });
 
