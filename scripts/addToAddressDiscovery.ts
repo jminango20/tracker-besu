@@ -13,8 +13,14 @@ async function main() {
   const addressDiscoveryAddress = deployments.AddressDiscovery?.address;
   const accessChannelManagerAddress = deployments.AccessChannelManager?.address;
   const schemaRegistryAddress = deployments.SchemaRegistry?.address;
+  const processRegistryAddress = deployments.ProcessRegistry?.address;
   
-  if (!addressDiscoveryAddress || !accessChannelManagerAddress || !schemaRegistryAddress) {
+  if (
+    !addressDiscoveryAddress || 
+    !accessChannelManagerAddress || 
+    !schemaRegistryAddress ||
+    !processRegistryAddress
+  ) {
     throw new Error("Missing contract addresses in deployment file");
   }
   
@@ -55,6 +61,23 @@ async function main() {
     const tx2 = await addressDiscovery.updateAddress(schemaRegistryId, schemaRegistryAddress);
     await tx2.wait();
     console.log(`✅ Registered SchemaRegistry in AddressDiscovery`);
+  }
+
+  // Register ProcessRegistry
+  const processRegistryId = ethers.id("ProcessRegistry");
+  try {
+    const currentSR = await addressDiscovery.getContractAddress(processRegistryId);
+    if (currentSR.toLowerCase() !== processRegistryAddress.toLowerCase()) {
+      const tx2 = await addressDiscovery.updateAddress(processRegistryId, processRegistryAddress);
+      await tx2.wait();
+      console.log(`✅ Updated ProcessRegistry address in AddressDiscovery`);
+    } else {
+      console.log(`ℹ️ ProcessRegistry already registered in AddressDiscovery`);
+    }
+  } catch (error) {
+    const tx2 = await addressDiscovery.updateAddress(processRegistryId, processRegistryAddress);
+    await tx2.wait();
+    console.log(`✅ Registered ProcessRegistry in AddressDiscovery`);
   }
   
   console.log(`Setup completed successfully!`);
