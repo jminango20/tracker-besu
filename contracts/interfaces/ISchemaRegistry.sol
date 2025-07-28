@@ -57,39 +57,33 @@ interface ISchemaRegistry {
     // =============================================================
 
     event SchemaCreated(
-        bytes32 indexed schemaId,
+        bytes32 indexed id,
         string indexed name,
-        uint256 indexed version,
-        address owner,
-        bytes32 channelName,
-        uint256 timestamp
-    );
-
-    event SchemaDeprecated(
-        bytes32 indexed schemaId,
-        uint256 version, 
-        address indexed owner, 
-        bytes32 indexed channelName, 
-        uint256 timestamp 
-    );
-
-    event SchemaInactivated(
-        bytes32 indexed schemaId,
-        uint256 indexed version,
-        SchemaStatus status,
+        uint256 version,
         address indexed owner,
         bytes32 channelName,
         uint256 timestamp
     );
 
     event SchemaUpdated(
-        bytes32 indexed schemaId,
-        uint256 previousVersion,
+        bytes32 indexed id,
+        uint256 indexed previousVersion,
         uint256 indexed newVersion,
-        address indexed owner,
+        address owner,
         bytes32 channelName,
         uint256 timestamp
     );
+
+    event SchemaStatusChanged(
+        bytes32 indexed id,
+        uint256 indexed version,
+        bytes32 indexed channelName,
+        SchemaStatus oldStatus,
+        SchemaStatus newStatus,
+        address updatedBy,
+        uint256 timestamp
+    );
+
 
     // =============================================================
     //                        CUSTOM ERRORS
@@ -98,17 +92,16 @@ interface ISchemaRegistry {
     error InvalidSchemaId();
     error InvalidDataHash();
     error InvalidSchemaName();
-    error DescriptionTooLong();
     error InvalidVersion();
+    error DescriptionTooLong();
+    error SchemaAlreadyExistsCannotRecreate(bytes32 channelName, bytes32 schemaId);
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId);
     error SchemaVersionNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error NotSchemaOwner(bytes32 channelName, bytes32 schemaId, address owner);
     error SchemaNotActive(bytes32 channelName, bytes32 schemaId, SchemaStatus status);
     error SchemaAlreadyInactive(bytes32 channelName, bytes32 schemaId, uint256 version);
-    error SchemaHasNoActiveVersion(bytes32 channelName, bytes32 schemaId);
     error NoActiveSchemaVersion(bytes32 channelName, bytes32 schemaId);
-    error SchemaAlreadyExistsCannotRecreate(bytes32 channelName, bytes32 schemaId);
-    error SchemaNotDeprecated(bytes32 channelName, bytes32 schemaId, uint256 version);
+    error NotSchemaOwner(bytes32 channelName, bytes32 schemaId, address owner);
+    error InvalidStatusTransition(SchemaStatus current, SchemaStatus newStatus);
 
     // =============================================================
     //                    SCHEMA MANAGEMENT
@@ -121,28 +114,49 @@ interface ISchemaRegistry {
     function createSchema(SchemaInput calldata schema) external;
 
     /**
-     * Changes the status of a schema to deprecated
+     * Updates a schema creating new version
+     * @param schema Schema data to update
+     */
+    function updateSchema(SchemaUpdateInput calldata schema) external;
+
+    /**
+     * Set schema status 
+     * @param schemaId Schema identifier
+     * @param version Schema version
+     * @param channelName Channel name
+     * @param newStatus New status to set
+     */
+    function setSchemaStatus(bytes32 schemaId, uint256 version, bytes32 channelName, SchemaStatus newStatus) external;
+    
+    /**
+     * Deprecates active schema version
      * @param schemaId Schema identifier
      * @param channelName The name of the channel to which the schema belongs
      */
     function deprecateSchema(bytes32 schemaId, bytes32 channelName) external; 
 
     /**
-     * Changes the status of a schema to inactive
+     * Inactivates specific schema version
      * @param schemaId Schema identifier
      * @param version Schema version
      * @param channelName The name of the channel to which the schema belongs
      */
     function inactivateSchema(bytes32 schemaId, uint256 version, bytes32 channelName) external;
 
-    /**
-     * Updates a schema 
-     * @param schema Schema data to update
-     */
-    function updateSchema(SchemaUpdateInput calldata schema) external;
+    // =============================================================
+    //                    VIEW FUNCTIONS - DUAL LOOKUP
+    // =============================================================
 
     /**
-     * Get a specific schema by ID and version
+     * Get active schema
+     * @param channelName Channel name
+     * @param schemaId Schema identifier
+     * @return schema Active schema data
+     */
+    function getSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
+    
+    /**
+     * Get specific schema version
      * @param channelName The channel name
      * @param schemaId The schema ID
      * @param version The schema version
@@ -159,7 +173,7 @@ interface ISchemaRegistry {
     function getActiveSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
 
     /**
-     * Get the latest version of a schema (may not be active)
+     * Get latest schema (may not be active)
      * @param channelName The channel name
      * @param schemaId The schema ID
      * @return schema The latest schema data
@@ -167,7 +181,7 @@ interface ISchemaRegistry {
     function getLatestSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
 
     /**
-     * Get all versions of a specific schema
+     * Get all versions of a schema
      * @param channelName The channel name
      * @param schemaId The schema ID
      * @return versions Array of version numbers

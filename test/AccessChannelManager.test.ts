@@ -199,14 +199,18 @@ describe("AccessChannelManager test", function () {
           .withArgs(ZeroAddress);
       });
 
-      it("Should revert if member is channel creator", async function () {
+      it("Should not revert if member is channel creator", async function () {
         const accessChannelManager =   await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
 
         await expect(accessChannelManager.connect(deployer).addChannelMember(CHANNEL_1, deployer.address))
-          .to.be.revertedWithCustomError(accessChannelManager, "CreatorCannotBeMember")
-          .withArgs(CHANNEL_1, deployer.address);
+          .not.to.be.reverted;
+
+        expect(await accessChannelManager.isChannelMember(CHANNEL_1, deployer.address)).to.be.true;
+
+        const channelInfo = await accessChannelManager.getChannelInfo(CHANNEL_1);
+        expect(channelInfo.memberCount).to.equal(1);  
       });
 
       it("Should revert if member already in channel", async function () {

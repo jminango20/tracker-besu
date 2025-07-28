@@ -37,6 +37,9 @@ async function main() {
     // 3. Deploy SchemaRegistry
     await DeploymentUtils.deployContractWithSigner("SchemaRegistry", [addressDiscoveryInfo.address], deployer);
 
+    // 4. Deploy ProcessRegistry
+    await DeploymentUtils.deployContractWithSigner("ProcessRegistry", [addressDiscoveryInfo.address], deployer);
+
     console.log(`\n All contracts deployed successfully!`);
     console.log(`Deployment info saved to: deployments/${network.name}.json`);
 

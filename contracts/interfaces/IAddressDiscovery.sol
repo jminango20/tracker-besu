@@ -7,32 +7,6 @@ pragma solidity ^0.8.20;
  * @author Juan Minango
  */
 interface IAddressDiscovery {
-        
-    // =============================================================
-    //                        ADDRESS MANAGEMENT
-    // =============================================================
-    
-    /**
-     * Function to register/update a new smart contract address.
-     * @param smartContract Name of the smart contract using keccak256
-     * @param newAddress Address of the smart contract
-     */
-    function updateAddress(bytes32 smartContract, address newAddress) external;
-    
-    /**
-     * Function to get the address of a smart contract.
-     * @param smartContract Name of the smart contract using keccak256
-     * @return Address of the smart contract
-     */
-    function getContractAddress(bytes32 smartContract) external view returns (address);
-    
-    /**
-     * Function to check if a smart contract is registered.
-     * @param smartContract Name of the smart contract using keccak256
-     * @return True if the smart contract is registered, false otherwise
-     */
-    function isRegistered(bytes32 smartContract) external view returns (bool);
-
 
     // =============================================================
     //                        EVENTS
@@ -65,4 +39,29 @@ interface IAddressDiscovery {
      * @dev Error when a smart contract is not registered
      */
     error ContractNotRegistered(bytes32 smartContract);
+        
+    // =============================================================
+    //                        ADDRESS MANAGEMENT
+    // =============================================================
+    
+    /**
+     * Function to register/update a new smart contract address.
+     * @param smartContract Name of the smart contract using keccak256
+     * @param newAddress Address of the smart contract
+     */
+    function updateAddress(bytes32 smartContract, address newAddress) external;
+    
+    /**
+     * Function to get the address of a smart contract.
+     * @param smartContract Name of the smart contract using keccak256
+     * @return Address of the smart contract
+     */
+    function getContractAddress(bytes32 smartContract) external view returns (address);
+    
+    /**
+     * Function to check if a smart contract is registered.
+     * @param smartContract Name of the smart contract using keccak256
+     * @return True if the smart contract is registered, false otherwise
+     */
+    function isRegistered(bytes32 smartContract) external view returns (bool);
 }
