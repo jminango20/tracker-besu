@@ -39,3 +39,17 @@ export const NON_EXISTENT_SCHEMA = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("
 
 export const DATA_HASH_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("data_hash_1"));
 export const DATA_HASH_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("data_hash_2"));
+
+/**
+ * PROCESS REGISTRY
+ */
+export const PROCESS_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PROCESS_ADMIN_ROLE"));
+
+// Define test process data
+export const PROCESS_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PROCESS_1"));
+export const PROCESS_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PROCESS_2"));
+export const NON_EXISTENT_PROCESS = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NON_EXISTENT_PROCESS"));
+export const NATURE_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NATURE_1"));
+export const NATURE_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NATURE_2"));
+export const STAGE_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("STAGE_1"));
+export const STAGE_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("STAGE_2"));

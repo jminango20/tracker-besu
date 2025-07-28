@@ -5,6 +5,7 @@ import {IAccessChannelManager} from "./interfaces/IAccessChannelManager.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {AccessChannelValidations} from "./lib/AccessChannelValidations.sol";
+import {Utils} from "./lib/Utils.sol";
 import {
     DEFAULT_ADMIN_ROLE, 
     CHANNEL_AUTHORITY_ROLE, 
@@ -131,13 +132,13 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
             isActive: true,
             creator: _msgSender(),
             memberCount: 0,
-            createdAt: block.timestamp
+            createdAt: Utils.timestamp()
         });
 
         _channelsByIndex[_channelCount] = channelName;
         _channelCount++;
 
-        emit ChannelCreated(channelName, _msgSender(), block.timestamp);
+        emit ChannelCreated(channelName, _msgSender(), Utils.timestamp());
     }
 
     /**
@@ -157,7 +158,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
         AccessChannelValidations.requireChannelNotActive(channel.isActive, channelName);
 
         channel.isActive = true;
-        emit ChannelActivated(channelName, block.timestamp);
+        emit ChannelActivated(channelName, Utils.timestamp());
     }
 
     /**
@@ -169,7 +170,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
         AccessChannelValidations.requireChannelNotDeactivated(channel.isActive, channelName);
 
         channel.isActive = false;
-        emit ChannelDeactivated(channelName, block.timestamp);
+        emit ChannelDeactivated(channelName, Utils.timestamp());
     }
 
     // =============================================================
@@ -486,8 +487,7 @@ contract AccessChannelManager is Context, IAccessChannelManager, AccessControl {
      */
      function _addMember(bytes32 channelName, address member) private {
         Channel storage channel = _channels[channelName];
-        
-        AccessChannelValidations.requireCreatorNotMember(channel.creator, member, channelName);
+    
         AccessChannelValidations.requireMemberNotInChannel(
             _channelMembers[channelName][member], 
             channelName, 

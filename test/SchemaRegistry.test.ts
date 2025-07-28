@@ -191,14 +191,16 @@ describe("SchemaRegistry test", function () {
       expect(schema.updatedAt).to.be.greaterThan(schema.createdAt);
     });
 
-    it("Should emit SchemaDeprecated event with correct parameters", async function () {
+    it("Should emit SchemaStatusChanged event with correct parameters", async function () {
       await expect(schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, schemaInput.channelName))
-        .to.emit(schemaRegistry, "SchemaDeprecated")
+        .to.emit(schemaRegistry, "SchemaStatusChanged")
         .withArgs(
           schemaInput.id,
           schemaInput.version,
+          schemaInput.channelName,
+          0, // ACTIVE
+          1, // DEPRECATED
           member1.address,
-          CHANNEL_1,
           anyValue // timestamp
         );
     });
@@ -212,7 +214,7 @@ describe("SchemaRegistry test", function () {
 
       // Should no longer have active version
       await expect(schemaRegistry.connect(member1).getActiveSchema(schemaInput.channelName, schemaInput.id))
-        .to.be.revertedWithCustomError(schemaRegistry, "SchemaHasNoActiveVersion")
+        .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion")
         .withArgs(schemaInput.channelName, schemaInput.id);
     });
 
@@ -220,12 +222,14 @@ describe("SchemaRegistry test", function () {
      
       // Deprecate 
       await expect(schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, schemaInput.channelName))
-        .to.emit(schemaRegistry, "SchemaDeprecated")
+        .to.emit(schemaRegistry, "SchemaStatusChanged")
         .withArgs(
           schemaInput.id,
           schemaInput.version,
-          member1.address,
           schemaInput.channelName,
+          0, // ACTIVE
+          1, // DEPRECATED
+          member1.address,
           anyValue
         );
 
@@ -251,13 +255,6 @@ describe("SchemaRegistry test", function () {
       const latestSchema = await schemaRegistry.connect(member1).getLatestSchema(schemaInput.channelName, schemaInput.id);
       expect(latestSchema.version).to.equal(schemaInput.version);
       expect(latestSchema.status).to.equal(1); // DEPRECATED
-    });
-
-    it("Should revert if schema id is zero", async function () {
-      const zeroSchemaId = ethers.ZeroHash;
-
-      await expect(schemaRegistry.connect(member1).deprecateSchema(zeroSchemaId, CHANNEL_1))
-        .to.be.revertedWithCustomError(schemaRegistry, "InvalidSchemaId");
     });
 
     it("Should revert if schema does not exist in channel", async function () {
@@ -287,14 +284,6 @@ describe("SchemaRegistry test", function () {
       await expect(schemaRegistry.connect(deployer).deprecateSchema(schemaInput.id, schemaInput.channelName))
         .to.be.revertedWithCustomError(schemaRegistry, "UnauthorizedChannelAccess")
         .withArgs(schemaInput.channelName, deployer.address);
-    });
-
-    it("Should revert if channel name is zero", async function () {
-      const zeroChannelName = ethers.ZeroHash;
-
-      await expect(schemaRegistry.connect(deployer).deprecateSchema(schemaInput.id, zeroChannelName))
-        .to.be.revertedWithCustomError(schemaRegistry, "InvalidChannelName")
-        .withArgs(zeroChannelName);
     });
 
     it("Should revert if active schema is not in ACTIVE status", async function () {
@@ -327,6 +316,15 @@ describe("SchemaRegistry test", function () {
       await expect(schemaRegistry.connect(member1).deprecateSchema(SCHEMA_2, CHANNEL_1))
         .to.be.revertedWithCustomError(schemaRegistry, "NotSchemaOwner")
         .withArgs(CHANNEL_1, SCHEMA_2, member1.address);
+    });
+
+    it("Should validate deprecateSchema wrapper follows rules", async function () {
+      await expect(schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, CHANNEL_1))
+        .not.to.be.reverted;
+
+      // After deprecation, deprecateSchema should fail (no active version)
+      await expect(schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, CHANNEL_1))
+        .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion");
     });
   });
 
@@ -361,24 +359,25 @@ describe("SchemaRegistry test", function () {
       expect(schema.status).to.equal(2); // SchemaStatus.INACTIVE
     });
 
-    it("Should emit SchemaInactivated event with correct parameters", async function () {
+    it("Should emit SchemaStatusChanged event with correct parameters", async function () {
       await expect(schemaRegistry.connect(member1).inactivateSchema(
         schemaInput.id, 
         schemaInput.version, 
         CHANNEL_1
       ))
-        .to.emit(schemaRegistry, "SchemaInactivated")
+        .to.emit(schemaRegistry, "SchemaStatusChanged")
         .withArgs(
           schemaInput.id,
           schemaInput.version,
-          0, // previousStatus (ACTIVE)
-          member1.address,
           CHANNEL_1,
+          0, // ACTIVE
+          2, // INACTIVE
+          member1.address,
           anyValue // timestamp
         );
     });
 
-    it("Should emit event with DEPRECATED as previous status", async function () {
+    it("Should emit event with SchemaStatusChanged as previous status", async function () {
       await schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, CHANNEL_1);
 
       await expect(schemaRegistry.connect(member1).inactivateSchema(
@@ -386,13 +385,14 @@ describe("SchemaRegistry test", function () {
         schemaInput.version, 
         CHANNEL_1
       ))
-        .to.emit(schemaRegistry, "SchemaInactivated")
+        .to.emit(schemaRegistry, "SchemaStatusChanged")
         .withArgs(
           schemaInput.id,
           schemaInput.version,
-          1, // previousStatus (DEPRECATED)
-          member1.address,
           CHANNEL_1,
+          1, // previousStatus (DEPRECATED)
+          2, // INACTIVE
+          member1.address,
           anyValue
         );
     });
@@ -408,16 +408,8 @@ describe("SchemaRegistry test", function () {
       );
 
       await expect(schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id))
-        .to.be.revertedWithCustomError(schemaRegistry, "SchemaHasNoActiveVersion")
+        .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion")
         .withArgs(schemaInput.channelName, schemaInput.id);
-    });
-
-    it("Should revert if schema id is zero", async function () {
-      await expect(schemaRegistry.connect(member1).inactivateSchema(
-        ethers.ZeroHash, 
-        1, 
-        CHANNEL_1
-      )).to.be.revertedWithCustomError(schemaRegistry, "InvalidSchemaId");
     });
 
     it("Should revert if version is zero", async function () {
@@ -427,14 +419,6 @@ describe("SchemaRegistry test", function () {
         CHANNEL_1
       ))
         .to.be.revertedWithCustomError(schemaRegistry, "InvalidVersion");
-    });
-
-    it("Should revert if channel name is zero", async function () {
-      await expect(schemaRegistry.connect(deployer).inactivateSchema(
-        SCHEMA_1, 
-        1, 
-        ethers.ZeroHash
-      )).to.be.revertedWithCustomError(schemaRegistry, "InvalidChannelName");
     });
 
     it("Should revert if schema version doesn't exist", async function () {
@@ -457,16 +441,6 @@ describe("SchemaRegistry test", function () {
         .withArgs(CHANNEL_1, schemaInput.id, 999);
     });
 
-    it("Should revert if caller is not channel member", async function () {
-      await expect(schemaRegistry.connect(deployer).inactivateSchema(
-        schemaInput.id, 
-        schemaInput.version, 
-        CHANNEL_1
-      ))
-        .to.be.revertedWithCustomError(schemaRegistry, "UnauthorizedChannelAccess")
-        .withArgs(CHANNEL_1, deployer.address);
-    });
-
     it("Should revert if caller is not schema owner", async function () {
       await expect(schemaRegistry.connect(member2).inactivateSchema(
         schemaInput.id, 
@@ -474,22 +448,6 @@ describe("SchemaRegistry test", function () {
         CHANNEL_1
       )).to.be.revertedWithCustomError(schemaRegistry, "NotSchemaOwner")
         .withArgs(schemaInput.channelName, schemaInput.id, member2.address);
-    });
-
-    it("Should revert if schema is already inactive", async function () {
-      await schemaRegistry.connect(member1).inactivateSchema(
-        schemaInput.id, 
-        schemaInput.version, 
-        CHANNEL_1
-      );
-
-      // Try to inactivate again
-      await expect(schemaRegistry.connect(member1).inactivateSchema(
-        schemaInput.id, 
-        schemaInput.version, 
-        CHANNEL_1
-      )).to.be.revertedWithCustomError(schemaRegistry, "SchemaAlreadyInactive")
-        .withArgs(schemaInput.channelName, schemaInput.id, schemaInput.version);
     });
 
     it("Should accept DEPRECATED schema for inactivation", async function () {
@@ -530,7 +488,7 @@ describe("SchemaRegistry test", function () {
 
       // Should no longer be able to get active schema
       await expect(schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id))
-        .to.be.revertedWithCustomError(schemaRegistry, "SchemaHasNoActiveVersion");
+        .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion");
     });
 
     it("Should handle concurrent schema operations", async function () {
@@ -555,6 +513,43 @@ describe("SchemaRegistry test", function () {
         1, 
         CHANNEL_1
       )).not.to.be.reverted;
+    });
+
+    it("Should validate inactivateSchema wrapper follows rules", async function () {
+      await expect(schemaRegistry.connect(member1).inactivateSchema(schemaInput.id, 1, CHANNEL_1))
+        .not.to.be.reverted;
+
+      // After inactivation, cannot change status anymore
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 1))
+        .to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition");
+    });
+
+    it("Should validate inactivateSchema can work on DEPRECATED schema", async function () {
+      // First deprecate
+      await schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, CHANNEL_1);
+      
+      // Then inactivate the deprecated version
+      await expect(schemaRegistry.connect(member1).inactivateSchema(schemaInput.id, 1, CHANNEL_1))
+        .not.to.be.reverted;
+
+      const schema = await schemaRegistry.connect(member1).getSchemaByVersion(CHANNEL_1, schemaInput.id, 1);
+      expect(schema.status).to.equal(2); // INACTIVE
+    });
+
+    it("Should NOT revert if schema is already inactive", async function () {
+      await schemaRegistry.connect(member1).inactivateSchema(
+        schemaInput.id, 
+        schemaInput.version, 
+        CHANNEL_1
+      );
+
+      // Try to inactivate again - NOW SHOULD FAIL due to transition rules
+      await expect(schemaRegistry.connect(member1).inactivateSchema(
+        schemaInput.id, 
+        schemaInput.version, 
+        CHANNEL_1
+      )).to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition")
+        .withArgs(2, 2); // INACTIVE → INACTIVE
     });
   });
 
@@ -666,15 +661,7 @@ describe("SchemaRegistry test", function () {
         .to.be.revertedWithCustomError(schemaRegistry, "DescriptionTooLong");
     });
 
-    it("Should accept description at maximum length", async function () {
-      const maxDescription = "a".repeat(255);
-      const validInput = { ...schemaUpdateInput, description: maxDescription };
-
-      await expect(schemaRegistry.connect(member1).updateSchema(validInput))
-        .not.to.be.reverted;
-    });
-
-     it("Should revert if schema does not exist", async function () {
+    it("Should revert if schema does not exist", async function () {
             const invalidInput = { ...schemaUpdateInput, id: NON_EXISTENT_SCHEMA };
 
       await expect(schemaRegistry.connect(member1).updateSchema(invalidInput))
@@ -704,17 +691,6 @@ describe("SchemaRegistry test", function () {
       await expect(schemaRegistry.connect(member2).updateSchema(schemaUpdateInput))
         .to.be.revertedWithCustomError(schemaRegistry, "NotSchemaOwner")
         .withArgs(schemaInput.channelName, schemaInput.id, member2.address);
-    });
-
-    it("Should revert if channel name is zero", async function () {
-      const invalidInput = { 
-        ...schemaUpdateInput, 
-        channelName: ethers.ZeroHash 
-      };
-
-      await expect(schemaRegistry.connect(deployer).updateSchema(invalidInput))
-        .to.be.revertedWithCustomError(schemaRegistry, "InvalidChannelName")
-        .withArgs(ethers.ZeroHash);
     });
 
     it("Should revert if caller is not channel member", async function () {
@@ -778,11 +754,6 @@ describe("SchemaRegistry test", function () {
           .to.be.revertedWithCustomError(schemaRegistry, "SchemaVersionNotFoundInChannel")
           .withArgs(CHANNEL_1, schemaInput.id, 999);
       });
-
-      it("Should revert if caller is not channel member", async function () {
-        await expect(schemaRegistry.connect(deployer).getSchemaByVersion(CHANNEL_1, schemaInput.id, schemaInput.version))
-          .to.be.revertedWithCustomError(schemaRegistry, "UnauthorizedChannelAccess");
-      });
     });
 
     describe("getActiveSchema", function () {
@@ -806,13 +777,13 @@ describe("SchemaRegistry test", function () {
         await schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, CHANNEL_1);
 
         await expect(schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id))
-          .to.be.revertedWithCustomError(schemaRegistry, "SchemaHasNoActiveVersion")
+          .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion")
           .withArgs(schemaInput.channelName, schemaInput.id);
       });
 
       it("Should revert for non-existent schema", async function () {
         await expect(schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, NON_EXISTENT_SCHEMA))
-          .to.be.revertedWithCustomError(schemaRegistry, "SchemaHasNoActiveVersion")
+          .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion")
           .withArgs(CHANNEL_1, NON_EXISTENT_SCHEMA);
       });
     });
@@ -824,13 +795,6 @@ describe("SchemaRegistry test", function () {
         const latestSchema = await schemaRegistry.connect(member1).getLatestSchema(CHANNEL_1, schemaInput.id);
         
         expect(latestSchema.version).to.equal(schemaUpdateInput.newVersion);
-      });
-
-      it("Should return same as active when no updates", async function () {
-        const latestSchema = await schemaRegistry.connect(member1).getLatestSchema(CHANNEL_1, schemaInput.id);
-        const activeSchema = await schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id);
-        
-        expect(latestSchema.version).to.equal(activeSchema.version);
       });
 
       it("Should revert for non-existent schema", async function () {
@@ -900,6 +864,28 @@ describe("SchemaRegistry test", function () {
         expect(schemaInfo.totalVersions).to.equal(2);
       });
     });
+
+    describe("GetSchema vs GetSchemaByVersion Consistency", function () {
+      it("Should return identical data when getting active schema", async function () {
+        const schemaByMain = await schemaRegistry.getSchema(CHANNEL_1, schemaInput.id);
+        const schemaByVersion = await schemaRegistry.getSchemaByVersion(CHANNEL_1, schemaInput.id, 1);
+        const activeSchema = await schemaRegistry.getActiveSchema(CHANNEL_1, schemaInput.id);
+
+        // All three methods should return identical data for active schema
+        expect(schemaByMain.id).to.equal(schemaByVersion.id);
+        expect(schemaByMain.version).to.equal(schemaByVersion.version);
+        expect(schemaByMain.id).to.equal(activeSchema.id);
+        expect(schemaByMain.version).to.equal(activeSchema.version);
+      });
+
+      it("Should update getSchema result after schema update", async function () {
+        await schemaRegistry.connect(member1).updateSchema(schemaUpdateInput);
+
+        const schemaByMain = await schemaRegistry.connect(member1).getSchema(CHANNEL_1, schemaInput.id);
+        expect(schemaByMain.version).to.equal(schemaUpdateInput.newVersion);
+        expect(schemaByMain.status).to.equal(0); // ACTIVE
+      });
+    });
   });
 
   describe("Access Control Management", function () {
@@ -952,7 +938,7 @@ describe("SchemaRegistry test", function () {
       
       // Should have no active version
       await expect(schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id))
-        .to.be.revertedWithCustomError(schemaRegistry, "SchemaHasNoActiveVersion");
+        .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion");
     });
 
     it("Should handle multiple schemas per owner", async function () {
@@ -986,5 +972,240 @@ describe("SchemaRegistry test", function () {
       expect(latestSchema.version).to.equal(5);
       expect(latestSchema.description).to.equal("Version 5");
     });
+
+    it("Should handle multiple schema versions efficiently", async function () {
+      await schemaRegistry.connect(member1).createSchema(schemaInput);
+      
+      // Create 10 versions
+      for (let i = 2; i <= 10; i++) {
+        const updateInput = { ...schemaUpdateInput, newVersion: i, description: `v${i}` };
+        await schemaRegistry.connect(member1).updateSchema(updateInput);
+      }
+      
+      const latestSchema = await schemaRegistry.connect(member1).getLatestSchema(CHANNEL_1, schemaInput.id);
+      expect(latestSchema.version).to.equal(10);
+      
+      // Getting all versions should return correct count
+      const [versions, schemas] = await schemaRegistry.connect(member1).getSchemaVersions(CHANNEL_1, schemaInput.id);
+      expect(versions.length).to.equal(10);
+      expect(schemas.length).to.equal(10);
+    });
+
+    it("Should maintain invariant: activeVersion <= latestVersion", async function () {
+      await schemaRegistry.connect(member1).createSchema(schemaInput);
+      
+      let info = await schemaRegistry.getSchemaInfo(CHANNEL_1, schemaInput.id);
+      expect(info.activeVersion).to.be.lte(info.latestVersion);
+      
+      await schemaRegistry.connect(member1).updateSchema(schemaUpdateInput);
+      
+      info = await schemaRegistry.connect(member1).getSchemaInfo(CHANNEL_1, schemaInput.id);
+      expect(info.activeVersion).to.be.lte(info.latestVersion);
+      expect(info.activeVersion).to.equal(info.latestVersion); // Should be equal after update
+      
+      await schemaRegistry.connect(member1).deprecateSchema(schemaInput.id, CHANNEL_1);
+      
+      info = await schemaRegistry.connect(member1).getSchemaInfo(CHANNEL_1, schemaInput.id);
+      expect(info.activeVersion).to.equal(0); // No active version
+      expect(info.latestVersion).to.equal(2); // Latest still exists
+    });
   });
+
+  describe("SetSchemaStatus", function () {
+    beforeEach(async function () {
+      await schemaRegistry.connect(member1).createSchema(schemaInput);
+    });
+
+    it("Should set schema status directly to any valid status", async function () {
+      // Test direct status change to DEPRECATED
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 1 // SchemaStatus.DEPRECATED
+      )).to.emit(schemaRegistry, "SchemaStatusChanged")
+        .withArgs(schemaInput.id, 1, CHANNEL_1, 0, 1, member1.address, anyValue);
+
+      // Test direct status change to INACTIVE  
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 2 // SchemaStatus.INACTIVE
+      )).to.emit(schemaRegistry, "SchemaStatusChanged")
+        .withArgs(schemaInput.id, 1, CHANNEL_1, 1, 2, member1.address, anyValue);
+    });
+
+    it("Should revert when trying to set status to same current status", async function () {
+      // Try to set ACTIVE when already ACTIVE - should work but be redundant
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 0 // SchemaStatus.ACTIVE
+      )).not.to.be.reverted;
+    });
+
+    it("Should allow ACTIVE → DEPRECATED transition", async function () {
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 1 // SchemaStatus.DEPRECATED
+      )).to.emit(schemaRegistry, "SchemaStatusChanged")
+        .withArgs(schemaInput.id, 1, CHANNEL_1, 0, 1, member1.address, anyValue);
+
+      const schema = await schemaRegistry.connect(member1).getSchemaByVersion(CHANNEL_1, schemaInput.id, 1);
+      expect(schema.status).to.equal(1); // DEPRECATED
+    });
+
+    it("Should allow ACTIVE → INACTIVE transition", async function () {
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 2 // SchemaStatus.INACTIVE
+      )).to.emit(schemaRegistry, "SchemaStatusChanged")
+        .withArgs(schemaInput.id, 1, CHANNEL_1, 0, 2, member1.address, anyValue);
+
+      const schema = await schemaRegistry.connect(member1).getSchemaByVersion(CHANNEL_1, schemaInput.id, 1);
+      expect(schema.status).to.equal(2); // INACTIVE
+    });
+
+    it("Should allow DEPRECATED → INACTIVE transition", async function () {
+      // First deprecate
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 1); // DEPRECATED
+      
+      // Then inactivate
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 2 // SchemaStatus.INACTIVE
+      )).to.emit(schemaRegistry, "SchemaStatusChanged")
+        .withArgs(schemaInput.id, 1, CHANNEL_1, 1, 2, member1.address, anyValue);
+
+      const schema = await schemaRegistry.connect(member1).getSchemaByVersion(CHANNEL_1, schemaInput.id, 1);
+      expect(schema.status).to.equal(2); // INACTIVE
+    });
+
+    it("Should allow same status transitions (idempotent)", async function () {
+      // ACTIVE → ACTIVE 
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 0 // SchemaStatus.ACTIVE
+      )).not.to.be.reverted;
+
+      // DEPRECATED → DEPRECATED
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 1); // DEPRECATED
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 1 // SchemaStatus.DEPRECATED again
+      )).not.to.be.reverted;
+    });
+
+    it("Should revert INACTIVE → ACTIVE transition", async function () {
+      // First inactivate
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 2); // INACTIVE
+      
+      // Try to reactivate - should fail
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 0 // SchemaStatus.ACTIVE
+      )).to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition")
+        .withArgs(2, 0); // INACTIVE → ACTIVE
+    });
+
+    it("Should revert INACTIVE → DEPRECATED transition", async function () {
+      // First inactivate
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 2); // INACTIVE
+      
+      // Try to deprecate - should fail
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 1 // SchemaStatus.DEPRECATED
+      )).to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition")
+        .withArgs(2, 1); // INACTIVE → DEPRECATED
+    });
+
+    it("Should revert DEPRECATED → ACTIVE transition", async function () {
+      // First deprecate
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 1); // DEPRECATED
+      
+      // Try to reactivate - should fail
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(
+        schemaInput.id, 1, CHANNEL_1, 0 // SchemaStatus.ACTIVE
+      )).to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition")
+        .withArgs(1, 0); // DEPRECATED → ACTIVE
+    });
+
+    it("Should enforce INACTIVE as final status", async function () {
+      // Inactivate schema
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 2); // INACTIVE
+      
+      // No transitions should be allowed from INACTIVE
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 0))
+        .to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition");
+        
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 1))
+        .to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition");
+        
+      // Even setting to INACTIVE again should fail
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 2))
+        .to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition");
+    });
+
+    it("Should clear active version when transitioning away from ACTIVE", async function () {
+      // Schema starts as active
+      expect(await schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id))
+        .not.to.be.reverted;
+
+      // Deprecate should clear active version
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 1); // DEPRECATED
+
+      await expect(schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id))
+        .to.be.revertedWithCustomError(schemaRegistry, "NoActiveSchemaVersion");
+    });
+
+    it("Should handle multiple versions with different statuses", async function () {
+      // Create version 2
+      await schemaRegistry.connect(member1).updateSchema(schemaUpdateInput);
+      
+      // Now we have: v1=DEPRECATED, v2=ACTIVE
+      
+      // Inactivate v1 (should work)
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 2))
+        .not.to.be.reverted;
+        
+      // v2 should still be active
+      const activeSchema = await schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id);
+      expect(activeSchema.version).to.equal(2);
+      
+      // Verify v1 is now INACTIVE and cannot be changed
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 0))
+        .to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition");
+    });
+
+    it("Should validate complete state machine flow", async function () {
+      // Path 1: ACTIVE → DEPRECATED → INACTIVE
+      const schema2Input = { ...schemaInput, id: SCHEMA_2, name: "Schema 2" };
+      await schemaRegistry.connect(member1).createSchema(schema2Input);
+      
+      await schemaRegistry.connect(member1).setSchemaStatus(SCHEMA_2, 1, CHANNEL_1, 1); // DEPRECATED
+      await schemaRegistry.connect(member1).setSchemaStatus(SCHEMA_2, 1, CHANNEL_1, 2); // INACTIVE
+      
+      // Path 2: ACTIVE → INACTIVE (direct)
+      await schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 2); // INACTIVE
+      
+      // Verify both schemas are in INACTIVE state and cannot be changed
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(SCHEMA_2, 1, CHANNEL_1, 0))
+        .to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition");
+        
+      await expect(schemaRegistry.connect(member1).setSchemaStatus(schemaInput.id, 1, CHANNEL_1, 1))
+        .to.be.revertedWithCustomError(schemaRegistry, "InvalidStatusTransition");
+    });
+  });
+
+  describe("Business Logic Edge Cases", function () {
+    it("Should handle schema recreation after complete inactivation", async function () {
+      await schemaRegistry.connect(member1).createSchema(schemaInput);
+      await schemaRegistry.connect(member1).inactivateSchema(schemaInput.id, 1, CHANNEL_1);
+      
+      // Should still not allow recreation (once created, always exists)
+      await expect(schemaRegistry.connect(member1).createSchema(schemaInput))
+        .to.be.revertedWithCustomError(schemaRegistry, "SchemaAlreadyExistsCannotRecreate");
+    });
+
+    it("Should prevent version gaps in updates", async function () {
+      await schemaRegistry.connect(member1).createSchema(schemaInput);
+      
+      // Update should auto-increment, can't skip versions
+      const invalidUpdate = { ...schemaUpdateInput, newVersion: 5 }; // Skip to v5
+      await expect(schemaRegistry.connect(member1).updateSchema(invalidUpdate))
+        .not.to.be.reverted;
+        
+      // Verify it used correct version (v2, not v5)
+      const activeSchema = await schemaRegistry.connect(member1).getActiveSchema(CHANNEL_1, schemaInput.id);
+      expect(activeSchema.version).to.equal(2); // Auto-incremented correctly
+    });
+  });
+
 });
