@@ -299,6 +299,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         returns (bool isValid, string memory reason) 
     {
 
+        _validateChannel(channelName);
         _validateIds(processId, natureId, stageId);
 
         // Check se processo existe
@@ -438,6 +439,19 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         }   
     }
 
+    function _validateChannel(bytes32 channelName) internal view returns (bool status, string memory error) {
+
+        (bool channelExists, bool channelIsActive, , , ) = _getAccessChannelManager().getChannelInfo(channelName);
+
+        if (!channelExists) {
+            return (false, "Channel does not exist");
+        }
+        if (!channelIsActive) {
+            return (false, "Channel is not active");
+        }
+                
+    }
+
     function _validateIds(bytes32 processId, bytes32 natureId, bytes32 stageId) internal pure {
         if (processId == bytes32(0)) revert InvalidProcessId();
         if (natureId == bytes32(0)) revert InvalidNatureId();
@@ -476,7 +490,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
             try schemaRegistry.getSchemaByVersion(
                 channelName, schemas[i].schemaId, schemas[i].version
             ) returns (ISchemaRegistry.Schema memory schema) {
-                if (schema.status == ISchemaRegistry.SchemaStatus.INACTIVE) {
+                if (schema.status != ISchemaRegistry.SchemaStatus.ACTIVE) {
                     revert SchemaNotActiveInChannel(channelName, schemas[i].schemaId, schemas[i].version);
                 }
             } catch {

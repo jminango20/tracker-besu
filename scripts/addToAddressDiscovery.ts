@@ -30,54 +30,54 @@ async function main() {
   console.log("Registering contracts in AddressDiscovery...");
   
   // Register AccessChannelManager
-  const accessChannelManagerId = ethers.id("AccessChannelManager");
+  const accessChannelManagerId = ethers.id("ACCESS_CHANNEL_MANAGER");
   try {
     const currentACM = await addressDiscovery.getContractAddress(accessChannelManagerId);
     if (currentACM.toLowerCase() !== accessChannelManagerAddress.toLowerCase()) {
       const tx1 = await addressDiscovery.updateAddress(accessChannelManagerId, accessChannelManagerAddress);
       await tx1.wait();
-      console.log(`✅ Updated AccessChannelManager address in AddressDiscovery`);
+      console.log(`✅ Updated ACCESS_CHANNEL_MANAGER address in AddressDiscovery`);
     } else {
-      console.log(`ℹ️ AccessChannelManager already registered in AddressDiscovery`);
+      console.log(`ℹ️ ACCESS_CHANNEL_MANAGER already registered in AddressDiscovery`);
     }
   } catch (error) {
     const tx1 = await addressDiscovery.updateAddress(accessChannelManagerId, accessChannelManagerAddress);
     await tx1.wait();
-    console.log(`✅ Registered AccessChannelManager in AddressDiscovery`);
+    console.log(`✅ Registered ACCESS_CHANNEL_MANAGER in AddressDiscovery`);
   }
   
   // Register SchemaRegistry
-  const schemaRegistryId = ethers.id("SchemaRegistry");
+  const schemaRegistryId = ethers.id("SCHEMA_REGISTRY");
   try {
     const currentSR = await addressDiscovery.getContractAddress(schemaRegistryId);
     if (currentSR.toLowerCase() !== schemaRegistryAddress.toLowerCase()) {
       const tx2 = await addressDiscovery.updateAddress(schemaRegistryId, schemaRegistryAddress);
       await tx2.wait();
-      console.log(`✅ Updated SchemaRegistry address in AddressDiscovery`);
+      console.log(`✅ Updated SCHEMA_REGISTRY address in AddressDiscovery`);
     } else {
-      console.log(`ℹ️ SchemaRegistry already registered in AddressDiscovery`);
+      console.log(`ℹ️ SCHEMA_REGISTRY already registered in AddressDiscovery`);
     }
   } catch (error) {
     const tx2 = await addressDiscovery.updateAddress(schemaRegistryId, schemaRegistryAddress);
     await tx2.wait();
-    console.log(`✅ Registered SchemaRegistry in AddressDiscovery`);
+    console.log(`✅ Registered SCHEMA_REGISTRY in AddressDiscovery`);
   }
 
   // Register ProcessRegistry
-  const processRegistryId = ethers.id("ProcessRegistry");
+  const processRegistryId = ethers.id("PROCESS_REGISTRY");
   try {
     const currentSR = await addressDiscovery.getContractAddress(processRegistryId);
     if (currentSR.toLowerCase() !== processRegistryAddress.toLowerCase()) {
       const tx2 = await addressDiscovery.updateAddress(processRegistryId, processRegistryAddress);
       await tx2.wait();
-      console.log(`✅ Updated ProcessRegistry address in AddressDiscovery`);
+      console.log(`✅ Updated PROCESS_REGISTRY address in AddressDiscovery`);
     } else {
-      console.log(`ℹ️ ProcessRegistry already registered in AddressDiscovery`);
+      console.log(`ℹ️ PROCESS_REGISTRY already registered in AddressDiscovery`);
     }
   } catch (error) {
     const tx2 = await addressDiscovery.updateAddress(processRegistryId, processRegistryAddress);
     await tx2.wait();
-    console.log(`✅ Registered ProcessRegistry in AddressDiscovery`);
+    console.log(`✅ Registered PROCESS_REGISTRY in AddressDiscovery`);
   }
   
   console.log(`Setup completed successfully!`);

@@ -476,7 +476,7 @@ describe("ProcessRegistry test", function () {
         .to.be.revertedWithCustomError(processRegistry, "SchemaNotActiveInChannel");
     });
 
-    it("Should accept deprecated schemas", async function () {
+    it("Should not accept deprecated schemas", async function () {
       const { processRegistry, schemaRegistry, processInputWithSchemas } = 
         await loadFixture(deployProcessRegistry);
 
@@ -489,7 +489,7 @@ describe("ProcessRegistry test", function () {
       };
 
       await expect(processRegistry.connect(member1).createProcess(validInput))
-        .not.to.be.reverted;
+        .to.be.revertedWithCustomError(processRegistry, "SchemaNotActiveInChannel");
     });
   });
 
