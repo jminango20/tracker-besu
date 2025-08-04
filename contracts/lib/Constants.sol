@@ -23,6 +23,9 @@ bytes32 constant SCHEMA_ADMIN_ROLE = keccak256("SCHEMA_ADMIN_ROLE");
 
 /// @dev Role for process admin operations
 bytes32 constant PROCESS_ADMIN_ROLE = keccak256("PROCESS_ADMIN_ROLE");
+
+/// @dev Role for asset admin operations
+bytes32 constant ASSET_ADMIN_ROLE = keccak256("ASSET_ADMIN_ROLE");
    
 // =============================================================
 //                        SYSTEM LIMITS
