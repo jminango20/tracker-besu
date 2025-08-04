@@ -79,6 +79,17 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     mapping(bytes32 => mapping(bytes32 => uint256[])) private _assetHistoryTimestampsByChannel;
 
+    /**
+     * Mapping to track parent and child assets by channel - TRANSFOM ONLY
+     * @dev channelName => parentAssetId => childAssetId
+     */
+    mapping(bytes32 => mapping(bytes32 => bytes32)) private _parentAssetByChannel;
+    /**
+     * @dev channelName => childAssetId => parentAssetId
+     */
+    mapping(bytes32 => mapping(bytes32 => bytes32[])) private _childAssetsByChannel;
+
+
 
     // =============================================================
     //                       CONSTRUCTOR
@@ -252,7 +263,103 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             transfer.idLocal,
             Utils.timestamp()
         );
+    }
 
+    /**
+     * @inheritdoc IAssetRegistry
+     */
+    function transformAsset(TransformAssetInput calldata transform) 
+        external 
+        validChannelName(transform.channelName) 
+        onlyChannelMember(transform.channelName)
+    {
+        _validateTransformAssetInput(transform);
+
+        if(!_assetExistsByChannel[transform.channelName][transform.assetId]) {
+            revert AssetNotFound(transform.channelName, transform.assetId);
+        }
+
+        Asset storage originalAsset = _assetsByChannel[transform.channelName][transform.assetId];
+
+        if (originalAsset.status != AssetStatus.ACTIVE) {
+            revert AssetNotActive(transform.channelName, transform.assetId);
+        }
+
+        if (originalAsset.owner != _msgSender()) {
+            revert NotAssetOwner(transform.channelName, transform.assetId, _msgSender());
+        }
+
+        //1. Gerar novo asset ID
+        bytes32 newAssetId = _generateTransformedAssetId(
+            transform.channelName, 
+            transform.assetId, 
+            transform.transformationId
+        );
+
+        if (_assetExistsByChannel[transform.channelName][newAssetId]) {
+            revert AssetAlreadyExists(newAssetId);
+        }
+
+        //2. Inativar original asset
+        originalAsset.status = AssetStatus.INACTIVE;
+        originalAsset.operation = AssetOperation.TRANSFORM;
+        originalAsset.lastUpdated = Utils.timestamp();
+
+        //3. Criar Novo Asset
+        Asset storage newAsset = _assetsByChannel[transform.channelName][newAssetId];
+        newAsset.assetId = newAssetId;
+        newAsset.owner = originalAsset.owner;   //Herda
+        newAsset.amount = transform.amount == 0 ? originalAsset.amount : transform.amount;
+        newAsset.idLocal = transform.idLocal;
+
+        for (uint256 i = 0; i < originalAsset.groupedAssets.length; i++) {
+            newAsset.groupedAssets.push(originalAsset.groupedAssets[i]);
+        }
+
+        newAsset.groupedBy = originalAsset.groupedBy;
+        
+        for (uint256 i = 0; i < originalAsset.externalIds.length; i++) {
+            newAsset.externalIds.push(originalAsset.externalIds[i]);
+        }
+
+        //3.1 Novos campos de transformação do novo asset
+        newAsset.parentAssetId = transform.assetId;
+        newAsset.transformationId = transform.transformationId;
+        
+        // Copiar dataHashes
+        for (uint256 i = 0; i < transform.dataHashes.length; i++) {
+            newAsset.dataHashes.push(transform.dataHashes[i]);
+        }
+
+        newAsset.status = AssetStatus.ACTIVE;
+        newAsset.operation = AssetOperation.TRANSFORM;
+        newAsset.createdAt = Utils.timestamp();
+        newAsset.lastUpdated = Utils.timestamp();
+        newAsset.originOwner = originalAsset.owner;
+
+        //4. Atualizar Rastreabilidade
+        _assetExistsByChannel[transform.channelName][newAssetId] = true;
+        _parentAssetByChannel[transform.channelName][newAssetId] = transform.assetId;
+        _childAssetsByChannel[transform.channelName][transform.assetId].push(newAssetId);
+
+        // Adicionar childAsset ao original
+        originalAsset.childAssets.push(newAssetId);
+
+        //5. Atualizar Mapeamentos
+        _addAssetToOwner(transform.channelName, newAssetId, newAsset.owner);
+        _addAssetToStatus(transform.channelName, newAssetId, AssetStatus.ACTIVE);
+        _updateAssetInStatusEnumeration(transform.channelName, transform.assetId, AssetStatus.INACTIVE);
+        
+        _addToHistory(transform.channelName, transform.assetId, AssetOperation.TRANSFORM, Utils.timestamp());
+        _addToHistory(transform.channelName, newAssetId, AssetOperation.TRANSFORM, Utils.timestamp());
+
+        emit AssetTransformed(
+            transform.assetId,
+            newAssetId,
+            newAsset.owner,
+            transform.transformationId,
+            Utils.timestamp()
+        );
     }
 
     // =============================================================
@@ -308,6 +415,22 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         timestamps = _assetHistoryTimestampsByChannel[channelName][assetId];
     }
 
+    /**
+     * @inheritdoc IAssetRegistry
+     */
+    function getTransformationHistory(bytes32 channelName, bytes32 assetId) 
+        external 
+        view 
+        returns (bytes32[] memory transformationChain) 
+    {
+        if (!_assetExistsByChannel[channelName][assetId]) {
+            revert AssetNotFound(channelName, assetId);
+        }
+        
+        return _buildTransformationChain(channelName, assetId);
+    }
+
+
     // =============================================================
     //                    VALIDATION FUNCTIONS
     // =============================================================
@@ -322,6 +445,16 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     function _validateTransferAssetInput(TransferAssetInput calldata input) internal pure {
         _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
         if (input.newOwner == address(0)) revert InvalidAddress(input.newOwner);
+    }
+
+    function _validateTransformAssetInput(TransformAssetInput calldata input) internal pure {
+        _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
+        
+        // Validar transformationId
+        bytes memory transformationBytes = bytes(input.transformationId);
+        if (transformationBytes.length == 0 || transformationBytes.length > 64) {
+            revert InvalidTransformationId();
+        }
     }
 
     function _validateCommonAssetFields(
@@ -373,6 +506,65 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         delete _assetIndexByChannelAndOwner[channelName][assetId];
     }
 
+    function _generateTransformedAssetId(bytes32 channelName, bytes32 originalAssetId, string memory transformationId) 
+        internal view returns (bytes32) 
+    {
+        return keccak256(abi.encodePacked(channelName, originalAssetId, transformationId, block.timestamp));
+    }
+
+    function _buildTransformationChain(bytes32 channelName, bytes32 assetId) 
+        internal view returns (bytes32[] memory chain) 
+    {
+        bytes32[] memory tempChain = new bytes32[](50);
+        uint256 count = 0;
+        bytes32 currentId = assetId;
+        
+        while (currentId != bytes32(0) && count < 50) {
+            tempChain[count] = currentId;
+            currentId = _parentAssetByChannel[channelName][currentId];
+            count++;
+        }
+        
+        chain = new bytes32[](count);
+        for (uint256 i = 0; i < count; i++) {
+            chain[i] = tempChain[count - 1 - i];
+        }
+    }
+
+    function _updateAssetInStatusEnumeration(bytes32 channelName, bytes32 assetId, AssetStatus newStatus) internal {
+        // Get current asset to determine old status
+        Asset storage asset = _assetsByChannel[channelName][assetId];
+        AssetStatus oldStatus = asset.status;
+        
+        // If status is the same, no need to update enumeration
+        if (oldStatus == newStatus) {
+            return;
+        }
+        
+        // Remove from old status array
+        _removeAssetFromStatus(channelName, assetId, oldStatus);
+        
+        // Add to new status array
+        _addAssetToStatus(channelName, assetId, newStatus);
+    }
+
+    function _removeAssetFromStatus(bytes32 channelName, bytes32 assetId, AssetStatus status) internal {
+        bytes32[] storage statusAssets = _assetsByChannelAndStatus[channelName][status];
+        uint256 assetIndex = _assetIndexByChannelAndStatus[channelName][assetId];
+        uint256 lastIndex = statusAssets.length - 1;
+        
+        // Move last element to deleted position (swap and pop pattern)
+        if (assetIndex != lastIndex) {
+            bytes32 lastAssetId = statusAssets[lastIndex];
+            statusAssets[assetIndex] = lastAssetId;
+            _assetIndexByChannelAndStatus[channelName][lastAssetId] = assetIndex;
+        }
+        
+        // Remove last element
+        statusAssets.pop();
+        delete _assetIndexByChannelAndStatus[channelName][assetId];
+    }
+
     // =============================================================
     //                    ADMIN FUNCTIONS
     // =============================================================
@@ -405,13 +597,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     // =============================================================
     // Note: These functions are defined in the interface but not implemented yet
     // They will be implemented in the next iterations
-
-    
-
-    function transformAsset(TransformAssetInput calldata) external pure returns (bytes32) {
-        revert("Not implemented yet");
-    }
-
     function splitAsset(SplitAssetInput calldata) external pure returns (bytes32[] memory) {
         revert("Not implemented yet");
     }

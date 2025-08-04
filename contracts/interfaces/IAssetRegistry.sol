@@ -53,6 +53,11 @@ interface IAssetRegistry {
         // Transfer tracking
         address originOwner;          // Original owner (for transfer operations)
         string[] externalIds;         // External system references
+
+        //Transformation tracking
+        bytes32 parentAssetId;      // Asset that was transformed (0x0 if original)
+        string transformationId;    // Transformation ID ("" if original)
+        bytes32[] childAssets;      // Assets that were transformed from the original (parentAssetId)
     }
 
     /**
@@ -95,7 +100,7 @@ interface IAssetRegistry {
      */
     struct TransformAssetInput {
         bytes32 assetId;              // Asset to transform
-        bytes32 newProcessId;         // New process for transformed asset
+        string transformationId;      // Transformation ID for tracking free form data (eg. "BEEF-PROCESSING")
         bytes32 channelName;          // Channel for permissions
         uint256 amount;               // Amount for new asset
         string idLocal;               // Location for new asset
@@ -171,7 +176,7 @@ interface IAssetRegistry {
         bytes32 indexed originalAssetId,
         bytes32 indexed newAssetId,
         address indexed owner,
-        bytes32 newProcessId,
+        string transformationId,
         uint256 timestamp
     );
 
@@ -232,6 +237,7 @@ interface IAssetRegistry {
     error TransferToSameOwner(bytes32 channelName, bytes32 assetId, address newOwner);
     error EmptyDataHashes();
     error EmptyLocation();
+    error InvalidTransformationId();
 
     // =============================================================
     //                    ASSET REGISTRY
@@ -258,10 +264,8 @@ interface IAssetRegistry {
     /**
      * Transform asset into a new asset
      * @param input Transform parameters
-     * @return newAssetId Identifier for the transformed asset
      */
-    function transformAsset(TransformAssetInput calldata input) 
-        external returns (bytes32 newAssetId);
+    function transformAsset(TransformAssetInput calldata input) external;
 
     /**
      * Split asset into multiple assets
@@ -376,4 +380,9 @@ interface IAssetRegistry {
         uint256 totalAssets,
         bool hasNextPage
     );
+
+    function getTransformationHistory(bytes32 channelName, bytes32 assetId) 
+        external view returns (
+            bytes32[] memory transformationChain
+        );
 }
