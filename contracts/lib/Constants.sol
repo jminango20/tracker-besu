@@ -48,6 +48,15 @@ uint256 constant INVALID_PAGE = 0;
 
 /// @dev Maximum string length
 uint256 constant MAX_STRING_LENGTH = 255;
+
+/// @dev Gas protection e business logic for split assets
+uint256 constant MAX_SPLIT_COUNT = 20;      // Max 20 splits por operação
+uint256 constant MIN_SPLIT_AMOUNT = 1;      // Min 1 unit por split
+
+/// @dev Gas protection e business logic for group assets
+uint256 constant MAX_GROUP_SIZE = 15;        // Max assets per group
+uint256 constant MIN_GROUP_SIZE = 2;         // Min assets per group (business requirement)
+uint256 constant MAX_GROUP_DATA_HASHES = 5;  // Max data hashes per group (gas protection)
     
 // =============================================================
 //                        CONTRACT IDENTIFIERS

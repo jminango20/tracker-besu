@@ -115,7 +115,7 @@ interface IAssetRegistry {
         bytes32 channelName;          // Channel for permissions
         uint256[] amounts;            // Amounts for each new asset
         string idLocal;               // Location for new assets
-        bytes32[][] dataHashes;      // Data hashes for each new asset
+        bytes32[] dataHashes;         // A data hash for each new asset
     }
 
     /**
@@ -123,6 +123,7 @@ interface IAssetRegistry {
      */
     struct GroupAssetsInput {
         bytes32[] assetIds;           // Assets to group
+        bytes32 groupAssetId;         // Group identifier
         bytes32 channelName;          // Channel for permissions
         uint256 amount;               // Amount for group asset
         string idLocal;               // Location for group asset
@@ -238,6 +239,19 @@ interface IAssetRegistry {
     error EmptyDataHashes();
     error EmptyLocation();
     error InvalidTransformationId();
+    error EmptyAmountsArray();
+    error ArrayLengthMismatch();
+    error TooManySplits(uint256 provided, uint256 maximum); 
+    error InvalidSplitAmount(uint256 amount);
+    error SplitAmountTooSmall(uint256 amount, uint256 minimum);
+    error AmountConservationViolated(uint256 original, uint256 totalSplit);
+    error InsufficientAssetsToGroup(uint256 provided, uint256 minimum);
+    error TooManyAssetsToGroup(uint256 provided, uint256 maximum);  
+    error GroupAssetAlreadyExists(bytes32 groupAssetId);
+    error DuplicateAssetsInGroup();
+    error SelfReferenceInGroup(bytes32 assetId);
+    error MixedOwnershipNotAllowed(address expected, address found);
+    error TooManyDataHashes(uint256 dataHashLength, uint256 maximum);
 
     // =============================================================
     //                    ASSET REGISTRY
@@ -270,18 +284,14 @@ interface IAssetRegistry {
     /**
      * Split asset into multiple assets
      * @param input Split parameters
-     * @return newAssetIds Array of new asset identifiers
      */
-    function splitAsset(SplitAssetInput calldata input) 
-        external returns (bytes32[] memory newAssetIds);
+    function splitAsset(SplitAssetInput calldata input) external;
 
     /**
      * Group multiple assets into one
      * @param input Group parameters
-     * @return groupAssetId Identifier for the group asset
      */
-    function groupAssets(GroupAssetsInput calldata input) 
-        external returns (bytes32 groupAssetId);
+    function groupAssets(GroupAssetsInput calldata input) external;
 
     /**
      * Ungroup assets back to originals
