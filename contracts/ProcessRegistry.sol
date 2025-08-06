@@ -11,6 +11,7 @@ import {
     SCHEMA_REGISTRY
     } from "./lib/Constants.sol";
 import {Utils} from "./lib/Utils.sol";
+import {ChannelAccess} from "./lib/ChannelAccess.sol";
 
 /**
  * @title ProcessRegistry
@@ -441,7 +442,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
 
     function _validateChannel(bytes32 channelName) internal view returns (bool status, string memory error) {
 
-        (bool channelExists, bool channelIsActive, , , ) = _getAccessChannelManager().getChannelInfo(channelName);
+        (bool channelExists, bool channelIsActive, , , ) = ChannelAccess.getChannelInfo(_getAddressDiscovery(), channelName);
 
         if (!channelExists) {
             return (false, "Channel does not exist");

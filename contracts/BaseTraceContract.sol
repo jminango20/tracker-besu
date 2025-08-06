@@ -6,13 +6,10 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IAccessChannelManager} from "./interfaces/IAccessChannelManager.sol";
 import {IAddressDiscovery} from "./interfaces/IAddressDiscovery.sol";
-import {
-    INVALID_PAGE,
-    FIRST_PAGE,
-    MAX_PAGE_SIZE,
-    DEFAULT_ADMIN_ROLE,
-    ACCESS_CHANNEL_MANAGER
-} from "./lib/Constants.sol";
+import {ChannelAccess} from "./lib/ChannelAccess.sol";
+import {Pagination} from "./lib/Pagination.sol";
+import {AddressDiscoveryHelper} from "./lib/AddressDiscoveryHelper.sol";
+import {DEFAULT_ADMIN_ROLE} from "./lib/Constants.sol";
 
 /**
  * @title BaseTraceContract
@@ -36,9 +33,6 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
 
     error InvalidAddress(address addr);
     error InvalidChannelName(bytes32 channelName);
-    error UnauthorizedChannelAccess(bytes32 channelName, address caller);
-    error InvalidPageNumber(uint256 page);
-    error InvalidPageSize(uint256 pageSize);
    
     // =============================================================
     //                       CONSTRUCTOR
@@ -50,7 +44,7 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
      */
     constructor(address addressDiscovery) {
 
-        if (addressDiscovery == address(0)) revert InvalidAddress(addressDiscovery);
+        AddressDiscoveryHelper.validateAddress(addressDiscovery);
        
         _addressDiscovery = IAddressDiscovery(addressDiscovery);
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());        
@@ -65,7 +59,7 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
      * @param channelName The name of the channel to check membership for
      */
     modifier onlyChannelMember(bytes32 channelName) {
-        _requireChannelMember(channelName, _msgSender());
+        ChannelAccess.requireMember(_addressDiscovery, channelName, _msgSender());
         _;
     }
 
@@ -84,8 +78,7 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
      * @param pageSize Number of items per page
      */
     modifier validPagination(uint256 page, uint256 pageSize) {
-        if (page == INVALID_PAGE) revert InvalidPageNumber(page);
-        if (pageSize == INVALID_PAGE || pageSize > MAX_PAGE_SIZE) revert InvalidPageSize(pageSize);
+        Pagination.validate(page, pageSize);
         _;
     }
 
@@ -94,7 +87,7 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
      * @param addr Address to validate
      */
     modifier validAddress(address addr) {
-        if (addr == address(0)) revert InvalidAddress(addr);
+        AddressDiscoveryHelper.validateAddress(addr);
         _;
     }
 
@@ -115,7 +108,7 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
         validAddress(account)
         returns (bool) 
     {
-        return _getAccessChannelManager().isChannelMember(channelName, account);
+        return ChannelAccess.isMember(_getAddressDiscovery(), channelName, account);
     }
 
     // =============================================================
@@ -127,6 +120,7 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
      * @param addressDiscoveryAdd Address of the address discovery contract
      */
     function _setAddressDiscovery(address addressDiscoveryAdd) internal {
+        AddressDiscoveryHelper.validateAddress(addressDiscoveryAdd);
         _addressDiscovery = IAddressDiscovery(addressDiscoveryAdd);
     }
 
@@ -136,28 +130,6 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
      */
     function _getAddressDiscovery() internal view returns (IAddressDiscovery) {
         return _addressDiscovery;
-    }
-
-    /**
-     * Gets the access channel manager instance
-     * @return The access channel manager contract
-     */
-    function _getAccessChannelManager() internal view returns (IAccessChannelManager) {
-        return IAccessChannelManager(_addressDiscovery.getContractAddress(ACCESS_CHANNEL_MANAGER));
-    }
-
-    /**
-     * Requires that caller is a member of the specified channel
-     * @param channelName The name of the channel to check membership for
-     * @param member Account to check
-     */
-    function _requireChannelMember(bytes32 channelName, address member) internal view {
-        if (channelName == bytes32(0)) revert InvalidChannelName(channelName);
-        
-        IAccessChannelManager accessChannelManager = _getAccessChannelManager();
-        if (!accessChannelManager.isChannelMember(channelName, member)) {
-            revert UnauthorizedChannelAccess(channelName, member);
-        }
     }
 
     /**
@@ -184,23 +156,7 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
             bool hasNextPage
         )
     {
-        if (totalItems == 0) {
-            return (0, 0, 0, false);
-        }
-        
-        totalPages = (totalItems + pageSize - FIRST_PAGE) / pageSize; // Ceiling division
-        
-        if (page > totalPages) {
-            return (0, 0, totalPages, false);
-        }
-        
-        startIndex = (page - FIRST_PAGE) * pageSize;
-        endIndex = startIndex + pageSize;
-        if (endIndex > totalItems) {
-            endIndex = totalItems;
-        }
-        
-        hasNextPage = page < totalPages;
+        return Pagination.calculate(totalItems, page, pageSize);
     }
 
     /**
