@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IAccessChannelManager} from "./interfaces/IAccessChannelManager.sol";
 import {IAddressDiscovery} from "./interfaces/IAddressDiscovery.sol";
 import {
@@ -18,7 +19,7 @@ import {
  * @notice Abstract contract providing common functionality for all trace contracts
  * @dev Base contract that all trace system contracts should inherit from
  */
-abstract contract BaseTraceContract is Context, AccessControl {
+abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
 
     // =============================================================
     //                        INTERFACES

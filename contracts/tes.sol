@@ -1,51 +1,53 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {BaseTraceContract} from "./BaseTraceContract.sol";
 import {ISchemaRegistry} from "./interfaces/ISchemaRegistry.sol";
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import {IAccessChannelManager} from "./interfaces/IAccessChannelManager.sol";
+import {IAddressDiscovery} from "./interfaces/IAddressDiscovery.sol";
+import {Utils} from "./lib/Utils.sol";
 import {
     SCHEMA_ADMIN_ROLE,
     MAX_STRING_LENGTH
-    } from "./lib/Constants.sol";
-import {Utils} from "./lib/Utils.sol";
+} from "./lib/Constants.sol";
+
 /**
  * @title SchemaRegistry
- * @notice Contract for managing data schemas in the trace system
- * @dev Inherits from BaseTraceContract for common functionality
+ * @notice Registry for managing versioned schemas with status control
+ * @dev Optimized version with efficient schema version tracking
  */
-contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
-
+contract Test is Context, BaseTraceContract, ISchemaRegistry {
     // =============================================================
     //                        STORAGE
     // =============================================================
-
+    
     /**
-     * Mapping to store schemasId by channel name
+     * Mapping to store schemas by channel, id and version
      * @dev channelName => schemaId => version => Schema
      */
     mapping(bytes32 => mapping(bytes32 => mapping(uint256 => Schema))) private _schemasByChannelName;
-
+    
     /**
-     * Mapping to track schemaId existence by channel name
+     * Mapping to track schema existence
      * @dev channelName => schemaId => version => exists
      */
     mapping(bytes32 => mapping(bytes32 => mapping(uint256 => bool))) private _schemaExistsByChannelName;
-
+    
     /**
-     * Mapping for latest version by name and channel
+     * Mapping for latest version by schema
      * @dev channelName => schemaId => version 
      */
     mapping(bytes32 => mapping(bytes32 => uint256)) private _latestVersions;
-
+    
     /**
      * Mapping to track active version per schema 
      * @dev channelName => schemaId => activeVersion
      */
     mapping(bytes32 => mapping(bytes32 => uint256)) private _activeVersions;
-
+    
     /**
-     * Mapping for efficient list of existing versions
+     * NEW: Efficient list of existing versions
      * @dev channelName => schemaId => version[]
      */
     mapping(bytes32 => mapping(bytes32 => uint256[])) private _schemaVersionLists;
@@ -53,11 +55,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     // =============================================================
     //                       CONSTRUCTOR
     // =============================================================
-
-    /**
-     * Constructor for SchemaRegistry
-     * @param addressDiscovery_ Address of the AddressDiscovery contract
-     */
+    
     constructor(address addressDiscovery_) 
         BaseTraceContract(addressDiscovery_) 
     {
@@ -67,22 +65,16 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     // =============================================================
     //                    SCHEMA MANAGEMENT
     // =============================================================
-
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
+    
     function createSchema(SchemaInput calldata schemaInput) 
         external 
         validChannelName(schemaInput.channelName)
         onlyChannelMember(schemaInput.channelName)
     {
-
         _validateSchemaInput(schemaInput.id, schemaInput.dataHash, schemaInput.name, schemaInput.description);
         _validateLatestVersion(schemaInput.channelName, schemaInput.id);
-        
         Schema memory newSchema = _createNewSchema(schemaInput);
         _storeNewSchema(newSchema);
-        
         emit SchemaCreated(
             newSchema.id,
             newSchema.name,
@@ -93,9 +85,6 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         );
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function setSchemaStatus(
         bytes32 schemaId, 
         uint256 version,
@@ -109,9 +98,6 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _setSchemaStatus(schemaId, version, channelName, newStatus);
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function deprecateSchema(bytes32 schemaId, bytes32 channelName)
         external 
         validChannelName(channelName)
@@ -121,9 +107,6 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _setSchemaStatus(schemaId, activeVersion, channelName, SchemaStatus.DEPRECATED);
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function inactivateSchema(bytes32 schemaId, uint256 version, bytes32 channelName) 
         external 
         validChannelName(channelName)
@@ -131,32 +114,21 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     {
         _setSchemaStatus(schemaId, version, channelName, SchemaStatus.INACTIVE);
     }
-    
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
+
     function updateSchema(SchemaUpdateInput calldata schemaUpdateInput) 
         external 
         validChannelName(schemaUpdateInput.channelName)
         onlyChannelMember(schemaUpdateInput.channelName)
     {
         _validateSchemaUpdateInput(schemaUpdateInput.id, schemaUpdateInput.newDataHash, schemaUpdateInput.description);
-        
         uint256 activeVersion = _getAndValidateActiveVersion(schemaUpdateInput.channelName, schemaUpdateInput.id);
-        
         Schema storage currentActiveSchema  = _getExistingSchema(schemaUpdateInput.channelName, schemaUpdateInput.id, activeVersion);        
         _validateSchemaOwnership(currentActiveSchema);
-
         _validateSchemaStatus(currentActiveSchema);
-
         uint256 timestamp = Utils.timestamp();
-
         _deprecateSchema(currentActiveSchema);
-        
         Schema memory newSchema = _updatedSchema(schemaUpdateInput, currentActiveSchema, timestamp);
-
         _storeUpdatedSchema(newSchema);
-     
         emit SchemaUpdated(
             newSchema.id,        
             activeVersion,      // Previous version (deprecated)
@@ -166,14 +138,11 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
             timestamp                         
         );
     }
-    
+
     // =============================================================
     //                    VIEW FUNCTIONS
     // =============================================================
-
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
+    
     function getSchema(bytes32 channelName, bytes32 schemaId) 
         external 
         view 
@@ -181,15 +150,10 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         returns (Schema memory schema) 
     {
         _validateSchemaId(schemaId);
-        
         uint256 activeVersion  = _getAndValidateActiveVersion(channelName, schemaId);
-        
         return _schemasByChannelName[channelName][schemaId][activeVersion];
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function getSchemaByVersion(bytes32 channelName, bytes32 schemaId, uint256 version) 
         external 
         view 
@@ -198,30 +162,20 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     {
         _validateSchemaId(schemaId);
         _validateVersion(version);
-
         return _getExistingSchema(channelName, schemaId, version);
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function getActiveSchema(bytes32 channelName, bytes32 schemaId) 
         external 
         view 
         validChannelName(channelName)
         returns (Schema memory schema) 
     {
-        
         _validateSchemaId(schemaId);
-        
         uint256 activeVersion  = _getAndValidateActiveVersion(channelName, schemaId);
-        
         return _schemasByChannelName[channelName][schemaId][activeVersion];
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function getLatestSchema(bytes32 channelName, bytes32 schemaId) 
         external 
         view 
@@ -229,18 +183,13 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         returns (Schema memory schema) 
     {
         _validateSchemaId(schemaId);
-
         uint256 latestVersion = _latestVersions[channelName][schemaId];
         if (latestVersion == 0) {
             revert SchemaNotFoundInChannel(channelName, schemaId);
         }
-        
         return _schemasByChannelName[channelName][schemaId][latestVersion];
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function getSchemaVersions(bytes32 channelName, bytes32 schemaId) 
         external 
         view 
@@ -248,63 +197,46 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         returns (uint256[] memory versions, Schema[] memory schemas) 
     {
         _validateSchemaId(schemaId);
-
         uint256 latestVersion = _latestVersions[channelName][schemaId];
         if (latestVersion == 0) {
             revert SchemaNotFoundInChannel(channelName, schemaId);
         }
-        
         return _getSchemaVersions(channelName, schemaId);
     }
 
-    /**
-     * @inheritdoc ISchemaRegistry
-     */
     function getSchemaInfo(bytes32 channelName, bytes32 schemaId)
         external
         view
         validChannelName(channelName)
         returns (
             uint256 latestVersion,
-            uint256 activeVersion,      // 0 = nenhuma ativa
+            uint256 activeVersion,
             bool hasActiveVersion,
-            address owner,              // Owner da última versão
+            address owner,
             uint256 totalVersions
         )
     {
         _validateSchemaId(schemaId);
-        
         latestVersion = _latestVersions[channelName][schemaId];
         if (latestVersion == 0) {
             revert SchemaNotFoundInChannel(channelName, schemaId);
         }
-        
         activeVersion = _activeVersions[channelName][schemaId];
         hasActiveVersion = activeVersion != 0;
-        
         Schema storage latestSchema = _schemasByChannelName[channelName][schemaId][latestVersion];
         owner = latestSchema.owner;
-        
         totalVersions = _schemaVersionLists[channelName][schemaId].length;
     }
 
     // =============================================================
     //                    ACCESS CONTROL HELPERS
     // =============================================================
-
-    /**
-     * Function to add a new schema admin.
-     * @param newSchemaAdmin Address of the new schema admin
-     */
+    
     function addSchemaAdmin(address newSchemaAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newSchemaAdmin == address(0)) revert InvalidAddress(newSchemaAdmin);
         _grantRole(SCHEMA_ADMIN_ROLE, newSchemaAdmin);
     }
 
-    /**
-     * Function to remove a schema admin.
-     * @param addressSchemaAdmin Address of schema admin to remove
-     */
     function removeSchemaAdmin(address addressSchemaAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (addressSchemaAdmin == address(0)) revert InvalidAddress(addressSchemaAdmin);
         _revokeRole(SCHEMA_ADMIN_ROLE, addressSchemaAdmin);
@@ -313,6 +245,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     // =============================================================
     //                    INTERNAL VALIDATION
     // =============================================================
+    
     function _validateSchemaInput(
         bytes32 id,
         bytes32 dataHash,
@@ -369,6 +302,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     // =============================================================
     //                    INTERNAL OPERATIONS
     // =============================================================
+    
     function _getExistingSchema(bytes32 channelName, bytes32 schemaId, uint256 version) 
         internal 
         view 
@@ -422,9 +356,8 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _schemasByChannelName[channelName][schemaId][version] = schema;
         _schemaExistsByChannelName[channelName][schemaId][version] = true;
         _latestVersions[channelName][schemaId] = version;
-        _activeVersions[channelName][schemaId] = version;   
-
-        _schemaVersionLists[schema.channelName][schema.id].push(schema.version);     
+        _activeVersions[channelName][schemaId] = version;
+        _schemaVersionLists[channelName][schemaId].push(version);
     }
 
     function _storeUpdatedSchema(Schema memory newSchema) internal {
@@ -436,7 +369,6 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _schemaExistsByChannelName[channelName][schemaId][newVersion] = true;
         _latestVersions[channelName][schemaId] = newVersion;
         _activeVersions[channelName][schemaId] = newVersion;
-
         _schemaVersionLists[channelName][schemaId].push(newVersion);
     }
 
@@ -459,26 +391,20 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         uint256 version,
         bytes32 channelName,
         SchemaStatus newStatus) internal {
-
         _validateSchemaId(schemaId);
         _validateVersion(version);
-
         Schema storage schema = _getExistingSchema(channelName, schemaId, version);
         _validateSchemaOwnership(schema);
-
         SchemaStatus currentStatus = schema.status;
-
         _validateStatusTransition(currentStatus, newStatus);
-
         schema.status = newStatus;
         schema.updatedAt = Utils.timestamp();
-
-        // Atualizar active version se necessário
+        
         uint256 currentActiveVersion = _activeVersions[channelName][schemaId];
         if (currentActiveVersion == version && newStatus != SchemaStatus.ACTIVE) {
-            _activeVersions[channelName][schemaId] = 0; // Clear active
+            _activeVersions[channelName][schemaId] = 0;
         }
-
+        
         emit SchemaStatusChanged(
             schemaId, 
             version, 
@@ -491,22 +417,21 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     }
 
     function _validateStatusTransition(SchemaStatus current, SchemaStatus newStatus) internal pure {
-        
-        // INACTIVE is final - cannot go anywhere
         if (current == SchemaStatus.INACTIVE) {
             revert InvalidStatusTransition(current, newStatus);
         }
-        
-        // DEPRECATED cannot go back to ACTIVE
         if (current == SchemaStatus.DEPRECATED && newStatus == SchemaStatus.ACTIVE) {
             revert InvalidStatusTransition(current, newStatus);
         }
     }
 
     // =============================================================
-    //                    ARRAY BUILDERS
+    //                    OPTIMIZED ARRAY BUILDERS
     // =============================================================
-
+    
+    /**
+     * @dev Efficiently get schema versions using pre-built list
+     */
     function _getSchemaVersions(bytes32 channelName, bytes32 schemaId)
         internal
         view
@@ -526,25 +451,15 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     // =============================================================
     //                    IMPLEMENTATION REQUIREMENTS
     // =============================================================
-
-    /**
-     * Set the address discovery contract
-     * @param discovery Address of the discovery contract
-     */
+    
     function setAddressDiscovery(address discovery) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setAddressDiscovery(discovery);
     }
 
-    /**
-     * Get the address discovery contract
-     * @return discovery Address of the discovery contract
-     */
     function getAddressDiscovery() external view returns (address) {
         return address(_getAddressDiscovery());
     }
-    /**
-     * @inheritdoc BaseTraceContract
-     */
+
     function getVersion() external pure override returns (string memory) {
         return "1.0.0";
     }   
