@@ -129,7 +129,27 @@ interface IAssetRegistry {
         string idLocal;               // Location for group asset
         bytes32[] dataHashes;         // Data for group asset
     }
-    
+
+    /**
+     * Input for ungrouping assets
+     */
+    struct UngroupAssetsInput {
+        bytes32 assetId;           // Group asset to ungroup
+        bytes32 channelName;       // Channel permissions
+        string idLocal;            // New location (empty = no change)
+        bytes32 dataHash;          // Single hash for all ungrouped assets
+    }
+
+    /**
+     * Input for inactivating assets
+     */
+    struct InactivateAssetInput {
+        bytes32 assetId;           // Asset to inactivate
+        bytes32 channelName;       // Channel permissions  
+        string finalLocation;      // Final location (empty = no change)
+        bytes32 finalDataHash;     // Final data hash (0x0 = no data)
+    }
+
     // =============================================================
     //                        EVENTS
     // =============================================================
@@ -252,6 +272,11 @@ interface IAssetRegistry {
     error SelfReferenceInGroup(bytes32 assetId);
     error MixedOwnershipNotAllowed(address expected, address found);
     error TooManyDataHashes(uint256 dataHashLength, uint256 maximum);
+    error AssetNotGrouped(bytes32 assetId);
+    error AssetAlreadyUngrouped(bytes32 assetId);
+    error GroupedAssetNotFound(bytes32 groupAssetId, bytes32 childAssetId);
+    error AssetAlreadyInactive(bytes32 channelName, bytes32 assetId);
+    error CannotReactivateAsset(bytes32 channelName, bytes32 assetId);
 
     // =============================================================
     //                    ASSET REGISTRY
@@ -295,28 +320,16 @@ interface IAssetRegistry {
 
     /**
      * Ungroup assets back to originals
-     * @param assetId Group asset to ungroup
-     * @param channelName Channel for permissions
-     * @param dataHashes Additional data for ungrouped assets
-     * @return ungroupedAssetIds Array of ungrouped asset identifiers
+     * @param input Ungroup parameters
      */
-    function ungroupAssets(
-        bytes32 assetId, 
-        bytes32 channelName,
-        bytes32[] calldata dataHashes
-    ) external returns (bytes32[] memory ungroupedAssetIds);
+
+    function ungroupAssets(UngroupAssetsInput calldata input) external;
 
     /**
      * Permanently inactivate an asset
-     * @param assetId Asset to inactivate
-     * @param channelName Channel for permissions
-     * @param dataHashes Final data hashes
+     * @param input Inactivate parameters
      */
-    function inactivateAsset(
-        bytes32 assetId,
-        bytes32 channelName,
-        bytes32[] calldata dataHashes
-    ) external;
+    function inactivateAsset(InactivateAssetInput calldata input) external;
 
     // =============================================================
     //                    VIEW FUNCTIONS
@@ -342,6 +355,7 @@ interface IAssetRegistry {
 
     /**
      * Get assets owned by an address
+     * @param channelName Channel name
      * @param owner Owner address
      * @param page Page number (1-indexed)
      * @param pageSize Number of items per page
@@ -350,6 +364,7 @@ interface IAssetRegistry {
      * @return hasNextPage True if there are more pages
      */
     function getAssetsByOwner(
+        bytes32 channelName,
         address owner,
         uint256 page,
         uint256 pageSize
@@ -374,6 +389,7 @@ interface IAssetRegistry {
 
     /**
      * Get assets by status
+     * @param channelName Channel name
      * @param status Asset status to filter by
      * @param page Page number (1-indexed)
      * @param pageSize Number of items per page
@@ -382,6 +398,7 @@ interface IAssetRegistry {
      * @return hasNextPage True if there are more pages
      */
     function getAssetsByStatus(
+        bytes32 channelName,
         AssetStatus status,
         uint256 page,
         uint256 pageSize

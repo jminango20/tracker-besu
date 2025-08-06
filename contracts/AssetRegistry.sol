@@ -542,6 +542,137 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         );
     }
 
+    /**
+     * @inheritdoc IAssetRegistry
+     */
+    function ungroupAssets(UngroupAssetsInput calldata ungroup) 
+        external
+        validChannelName(ungroup.channelName)
+        onlyChannelMember(ungroup.channelName)
+    {
+        _validateUngroupAssetsInput(ungroup);
+
+        if (!_assetExistsByChannel[ungroup.channelName][ungroup.assetId]) {
+            revert AssetNotFound(ungroup.channelName, ungroup.assetId);
+        }
+
+        Asset storage groupAsset = _assetsByChannel[ungroup.channelName][ungroup.assetId];
+
+        if (groupAsset.status != AssetStatus.ACTIVE) {
+            revert AssetNotActive(ungroup.channelName, ungroup.assetId);
+        }
+        
+        if (groupAsset.owner != _msgSender()) {
+            revert NotAssetOwner(ungroup.channelName, ungroup.assetId, _msgSender());
+        }
+
+        _validateCanUngroup(groupAsset);
+
+        //1. Reativar assets a serem desagrupados
+        bytes32[] memory ungroupedAssetIds = groupAsset.groupedAssets; // Array já existe!
+
+        for (uint256 i = 0; i < ungroupedAssetIds.length; i++) {
+            bytes32 childAssetId = ungroupedAssetIds[i];
+            
+            // Verificar se asset filho existe
+            if (!_assetExistsByChannel[ungroup.channelName][childAssetId]) {
+                revert GroupedAssetNotFound(ungroup.assetId, childAssetId);
+            }
+            
+            Asset storage childAsset = _assetsByChannel[ungroup.channelName][childAssetId];
+            
+            //1.1 Reativar asset filho
+            childAsset.status = AssetStatus.ACTIVE;
+            childAsset.operation = AssetOperation.UNGROUP;
+            childAsset.lastUpdated = Utils.timestamp();
+            
+            //1.2 Aplicar novos dados ao asset filho (se fornecidos)
+            if (ungroup.dataHash != bytes32(0)) {
+                // Substituir dataHashes com novo hash
+                delete childAsset.dataHashes;
+                childAsset.dataHashes = new bytes32[](1);
+                childAsset.dataHashes[0] = ungroup.dataHash;
+            }
+            
+            if (bytes(ungroup.idLocal).length > 0) {
+                childAsset.idLocal = ungroup.idLocal;
+            }
+            
+            //1.3 Desvincular asset filho do grupo
+            childAsset.groupedBy = bytes32(0);  // Não está mais agrupado
+            
+            //1.4 Atualizar status e history
+            _updateAssetInStatusEnumeration(ungroup.channelName, childAssetId, AssetStatus.ACTIVE);
+            _addToHistory(ungroup.channelName, childAssetId, AssetOperation.UNGROUP, Utils.timestamp());
+        }
+
+        //2. Inactivate asset grupo
+        groupAsset.status = AssetStatus.INACTIVE;
+        groupAsset.operation = AssetOperation.UNGROUP;
+        groupAsset.lastUpdated = Utils.timestamp();
+        
+        //3. Atualizar status e history
+        _updateAssetInStatusEnumeration(ungroup.channelName, ungroup.assetId, AssetStatus.INACTIVE);
+        _addToHistory(ungroup.channelName, ungroup.assetId, AssetOperation.UNGROUP, Utils.timestamp());
+        
+        emit AssetsUngrouped(
+            ungroup.assetId,
+            ungroupedAssetIds,
+            groupAsset.owner,
+            Utils.timestamp()
+        );
+    }
+
+    /**
+     * @inheritdoc IAssetRegistry
+     */
+    function inactivateAsset(InactivateAssetInput calldata inactivate) 
+        external 
+        validChannelName(inactivate.channelName)
+        onlyChannelMember(inactivate.channelName)    
+    {
+        _validateInactivateAssetInput(inactivate);
+        
+        if (!_assetExistsByChannel[inactivate.channelName][inactivate.assetId]) {
+            revert AssetNotFound(inactivate.channelName, inactivate.assetId);
+        }
+        
+        Asset storage asset = _assetsByChannel[inactivate.channelName][inactivate.assetId];
+        
+        if (asset.status != AssetStatus.ACTIVE) {
+            revert AssetNotActive(inactivate.channelName, inactivate.assetId);
+        }
+        
+        if (asset.owner != _msgSender()) {
+            revert NotAssetOwner(inactivate.channelName, inactivate.assetId, _msgSender());
+        }
+        
+        if (bytes(inactivate.finalLocation).length > 0) {
+            asset.idLocal = inactivate.finalLocation;
+        }
+        
+        if (inactivate.finalDataHash != bytes32(0)) {
+            // Substituir dataHashes com hash final
+            delete asset.dataHashes;
+            asset.dataHashes = new bytes32[](1);
+            asset.dataHashes[0] = inactivate.finalDataHash;
+        }
+        
+        asset.status = AssetStatus.INACTIVE;
+        asset.operation = AssetOperation.INACTIVATE;
+        asset.lastUpdated = Utils.timestamp();
+        
+        _updateAssetInStatusEnumeration(inactivate.channelName, inactivate.assetId, AssetStatus.INACTIVE);
+        _addToHistory(inactivate.channelName, inactivate.assetId, AssetOperation.INACTIVATE, Utils.timestamp());
+        
+        emit AssetInactivated(
+            inactivate.assetId,
+            asset.owner,
+            AssetOperation.INACTIVATE,
+            Utils.timestamp()
+        );
+    }
+
     // =============================================================
     //                    VIEW FUNCTIONS
     // =============================================================
@@ -608,6 +739,88 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
         
         return _buildTransformationChain(channelName, assetId);
+    }
+
+    /**
+     * @inheritdoc IAssetRegistry
+     */
+    function getAssetsByOwner(
+        bytes32 channelName,
+        address owner, 
+        uint256 page, 
+        uint256 pageSize
+    ) external 
+      view 
+      validChannelName(channelName)
+      validAddress(owner)
+      validPagination(page, pageSize)
+      returns (
+        bytes32[] memory assetIds, 
+        uint256 totalAssets, 
+        bool hasNextPage
+    )
+    {
+        bytes32[] storage ownerAssets = _assetsByChannelAndOwner[channelName][owner];
+        totalAssets = ownerAssets.length;
+
+        if (totalAssets == 0) {
+            return (new bytes32[](0), 0, false);
+        }
+
+        (uint256 startIndex, uint256 endIndex, uint256 totalPages, bool _hasNextPage) = _calculatePagination(totalAssets, page, pageSize);
+    
+        hasNextPage = _hasNextPage;
+
+        if (page > totalPages) {
+            return (new bytes32[](0), totalAssets, false);
+        }
+
+        uint256 resultLength = endIndex - startIndex;
+        assetIds = new bytes32[](resultLength);
+        
+        for (uint256 i = 0; i < resultLength; i++) {
+            assetIds[i] = ownerAssets[startIndex + i];
+        }
+    }
+
+    /**
+     * @inheritdoc IAssetRegistry
+     */
+    function getAssetsByStatus(
+        bytes32 channelName,
+        AssetStatus status, 
+        uint256 page, 
+        uint256 pageSize
+    ) external 
+      view
+      validChannelName(channelName)
+      validPagination(page, pageSize) 
+      returns (
+        bytes32[] memory assetIds, 
+        uint256 totalAssets, 
+        bool hasNextPage
+    ) 
+    {
+         bytes32[] storage statusAssets = _assetsByChannelAndStatus[channelName][status];
+        totalAssets = statusAssets.length;
+
+        if (totalAssets == 0) {
+            return (new bytes32[](0), 0, false);
+        }
+
+        (uint256 startIndex, uint256 endIndex, uint256 totalPages, bool _hasNextPage) = _calculatePagination(totalAssets, page, pageSize);
+        hasNextPage = _hasNextPage;
+
+        if (page > totalPages) {
+            return (new bytes32[](0), totalAssets, false);
+        }
+
+        uint256 resultLength = endIndex - startIndex;
+        assetIds = new bytes32[](resultLength);
+        
+        for (uint256 i = 0; i < resultLength; i++) {
+            assetIds[i] = statusAssets[startIndex + i];
+        }
     }
 
 
@@ -724,6 +937,26 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         if (totalOriginalAmounts != input.amount) {
             revert AmountConservationViolated(totalOriginalAmounts, input.amount);
         }
+    }
+
+    function _validateUngroupAssetsInput(UngroupAssetsInput calldata input) internal pure {
+        if (input.assetId == bytes32(0)) revert InvalidAssetId(input.channelName, input.assetId);
+    }
+
+    function _validateCanUngroup(Asset storage groupAsset) internal view {
+        if (groupAsset.groupedAssets.length == 0) {
+            revert AssetNotGrouped(groupAsset.assetId);
+        }
+        
+        if (groupAsset.operation == AssetOperation.UNGROUP) {
+            revert AssetAlreadyUngrouped(groupAsset.assetId);
+        }
+    }
+
+    function _validateInactivateAssetInput(InactivateAssetInput calldata input) internal pure {
+        if (input.assetId == bytes32(0)) {
+            revert InvalidAssetId(input.channelName, input.assetId);
+        }       
     }
 
     function _validateCommonAssetFields(
@@ -903,29 +1136,5 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     function getVersion() external pure override returns (string memory) {
         return "1.0.0";
-    }
-
-    // =============================================================
-    //                    PLACEHOLDER FUNCTIONS
-    // =============================================================
-    // Note: These functions are defined in the interface but not implemented yet
-    // They will be implemented in the next iterations
-
-    
-
-    function ungroupAssets(bytes32, bytes32, bytes32[] calldata) external pure returns (bytes32[] memory) {
-        revert("Not implemented yet");
-    }
-
-    function inactivateAsset(bytes32, bytes32, bytes32[] calldata) external pure {
-        revert("Not implemented yet");
-    }
-
-    function getAssetsByOwner(address, uint256, uint256) external pure returns (bytes32[] memory, uint256, bool) {
-        revert("Not implemented yet");
-    }
-
-    function getAssetsByStatus(AssetStatus, uint256, uint256) external pure returns (bytes32[] memory, uint256, bool) {
-        revert("Not implemented yet");
     }
 }
