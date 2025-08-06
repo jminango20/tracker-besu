@@ -159,21 +159,6 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
         return Pagination.calculate(totalItems, page, pageSize);
     }
 
-    /**
-     * Generates a unique ID based on multiple parameters
-     * @param param1 First parameter
-     * @param param2 Second parameter
-     * @param param3 Third parameter
-     * @return Unique bytes32 ID
-     */
-    function _generateId(
-        bytes32 param1,
-        bytes32 param2,
-        bytes32 param3
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(param1, param2, param3));
-    }
-
     // =============================================================
     //                    VIRTUAL FUNCTIONS
     // =============================================================
