@@ -57,6 +57,9 @@ uint256 constant MIN_SPLIT_AMOUNT = 1;      // Min 1 unit por split
 uint256 constant MAX_GROUP_SIZE = 15;        // Max assets per group
 uint256 constant MIN_GROUP_SIZE = 2;         // Min assets per group (business requirement)
 uint256 constant MAX_GROUP_DATA_HASHES = 5;  // Max data hashes per group (gas protection)
+uint256 constant MAX_DATA_HASHES = 10;
+uint256 constant MAX_EXTERNAL_IDS = 10;
+uint256 constant MAX_TRANSFORMATION_DEPTH = 20;
     
 // =============================================================
 //                        CONTRACT IDENTIFIERS

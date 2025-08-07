@@ -16,7 +16,10 @@ import {
     MIN_SPLIT_AMOUNT,
     MAX_GROUP_SIZE,
     MIN_GROUP_SIZE,
-    MAX_GROUP_DATA_HASHES
+    MAX_GROUP_DATA_HASHES,
+    MAX_DATA_HASHES,
+    MAX_EXTERNAL_IDS,
+    MAX_TRANSFORMATION_DEPTH
 } from "./lib/Constants.sol";
 import {Utils} from "./lib/Utils.sol";
 
@@ -118,11 +121,16 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      * @inheritdoc IAssetRegistry
      */
     function createAsset(CreateAssetInput calldata input) 
-        external 
+        external
+        nonReentrant
         validChannelName(input.channelName)
         onlyChannelMember(input.channelName)
     {
         _validateCreateAssetInput(input);
+
+        if (_assetExistsByChannel[input.channelName][input.assetId]) {
+            revert AssetAlreadyExists(input.channelName, input.assetId);
+        }
 
         // Create asset structure
         Asset storage newAsset = _assetsByChannel[input.channelName][input.assetId];
@@ -166,6 +174,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     function updateAsset(UpdateAssetInput calldata update) 
         external
+        nonReentrant
         validChannelName(update.channelName)
         onlyChannelMember(update.channelName) 
     {
@@ -216,7 +225,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      * @inheritdoc IAssetRegistry
      */
     function transferAsset(TransferAssetInput calldata transfer) 
-        external  
+        external
+        nonReentrant 
         validChannelName(transfer.channelName)
         onlyChannelMember(transfer.channelName)
     {
@@ -274,7 +284,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      * @inheritdoc IAssetRegistry
      */
     function transformAsset(TransformAssetInput calldata transform) 
-        external 
+        external
+        nonReentrant
         validChannelName(transform.channelName) 
         onlyChannelMember(transform.channelName)
     {
@@ -294,6 +305,11 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert NotAssetOwner(transform.channelName, transform.assetId, _msgSender());
         }
 
+        uint256 currentDepth = _getTransformationDepth(transform.channelName, transform.assetId);
+        if (currentDepth >= MAX_TRANSFORMATION_DEPTH) {
+            revert TransformationChainTooDeep(currentDepth, MAX_TRANSFORMATION_DEPTH);
+        }
+
         //1. Gerar novo asset ID
         bytes32 newAssetId = _generateTransformedAssetId(
             transform.channelName, 
@@ -302,7 +318,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         );
 
         if (_assetExistsByChannel[transform.channelName][newAssetId]) {
-            revert AssetAlreadyExists(newAssetId);
+            revert AssetAlreadyExists(transform.channelName, newAssetId);
         }
 
         //2. Inativar original asset
@@ -371,7 +387,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      * @inheritdoc IAssetRegistry
      */
     function splitAsset(SplitAssetInput calldata split) 
-        external 
+        external
+        nonReentrant
         validChannelName(split.channelName)
         onlyChannelMember(split.channelName) 
     {
@@ -414,7 +431,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             
             // Verificar se ID gerado não existe (safety check)
             if (_assetExistsByChannel[split.channelName][newAssetId]) {
-                revert AssetAlreadyExists(newAssetId);
+                revert AssetAlreadyExists(split.channelName, newAssetId);
             }
             
             Asset storage newAsset = _assetsByChannel[split.channelName][newAssetId];
@@ -477,6 +494,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     function groupAssets(GroupAssetsInput calldata group) 
         external
+        nonReentrant
         validChannelName(group.channelName)
         onlyChannelMember(group.channelName)
     {
@@ -547,6 +565,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     function ungroupAssets(UngroupAssetsInput calldata ungroup) 
         external
+        nonReentrant
         validChannelName(ungroup.channelName)
         onlyChannelMember(ungroup.channelName)
     {
@@ -829,6 +848,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     // =============================================================
     function _validateCreateAssetInput(CreateAssetInput calldata input) internal pure {
         _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
+        _validateExternalIds(input.externalIds);
     }
 
     function _validateUpdateAssetInput(UpdateAssetInput calldata input) internal pure {
@@ -837,12 +857,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
 
     function _validateTransferAssetInput(TransferAssetInput calldata input) internal pure {
         _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
+        _validateExternalIds(input.externalIds);
         if (input.newOwner == address(0)) revert InvalidAddress(input.newOwner);
     }
 
     function _validateTransformAssetInput(TransformAssetInput calldata input) internal pure {
         _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
-        
         // Validar transformationId
         bytes memory transformationBytes = bytes(input.transformationId);
         if (transformationBytes.length == 0 || transformationBytes.length > 64) {
@@ -968,6 +988,14 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         if (assetId == bytes32(0)) revert InvalidAssetId(channelName, assetId);
         if (bytes(idLocal).length == 0) revert EmptyLocation();
         if (dataHashes.length == 0) revert EmptyDataHashes();
+        if (dataHashes.length > MAX_DATA_HASHES) revert TooManyDataHashes(dataHashes.length, MAX_DATA_HASHES);
+    }
+
+
+    function _validateExternalIds(string[] calldata externalIds) internal pure {
+        if (externalIds.length > MAX_EXTERNAL_IDS) {
+            revert TooManyExternalIds(externalIds.length, MAX_EXTERNAL_IDS);
+        }
     }
 
     // =============================================================
@@ -1017,11 +1045,11 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     function _buildTransformationChain(bytes32 channelName, bytes32 assetId) 
         internal view returns (bytes32[] memory chain) 
     {
-        bytes32[] memory tempChain = new bytes32[](50);
+        bytes32[] memory tempChain = new bytes32[](MAX_TRANSFORMATION_DEPTH);
         uint256 count = 0;
         bytes32 currentId = assetId;
         
-        while (currentId != bytes32(0) && count < 50) {
+        while (currentId != bytes32(0) && count < MAX_TRANSFORMATION_DEPTH) {
             tempChain[count] = currentId;
             currentId = _parentAssetByChannel[channelName][currentId];
             count++;
@@ -1074,7 +1102,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             originalAssetId, 
             index, 
             channelName, 
-            block.timestamp,
+            block.number,
             _msgSender()  
         ));
     }
@@ -1108,6 +1136,23 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             }
         }
         return false;
+    }
+
+    function _getTransformationDepth(
+        bytes32 channelName, 
+        bytes32 assetId
+    ) internal view returns (uint256) {
+        uint256 depth = 0;
+        bytes32 currentId = assetId;
+        
+        while (currentId != bytes32(0) && depth < MAX_TRANSFORMATION_DEPTH) {
+            currentId = _parentAssetByChannel[channelName][currentId];
+            if (currentId != bytes32(0)) {
+                depth++;
+            }
+        }
+        
+        return depth;
     }
 
 

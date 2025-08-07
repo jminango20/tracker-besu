@@ -251,7 +251,7 @@ interface IAssetRegistry {
     error InvalidAssetId(bytes32 channelName, bytes32 assetId);
     error AssetNotFound(bytes32 channelName, bytes32 assetId);
     error AssetNotActive(bytes32 channelName, bytes32 assetId);
-    error AssetAlreadyExists(bytes32 assetId);
+    error AssetAlreadyExists(bytes32 channelName,bytes32 assetId);
     error NotAssetOwner(bytes32 channelName, bytes32 assetId, address caller);
     error InvalidAmount(uint256 amount);
     error ProcessValidationFailed(bytes32 channelName, bytes32 processId);
@@ -272,11 +272,13 @@ interface IAssetRegistry {
     error SelfReferenceInGroup(bytes32 assetId);
     error MixedOwnershipNotAllowed(address expected, address found);
     error TooManyDataHashes(uint256 dataHashLength, uint256 maximum);
+    error TooManyExternalIds(uint256 externalIdsLength, uint256 maxExternalIds);
     error AssetNotGrouped(bytes32 assetId);
     error AssetAlreadyUngrouped(bytes32 assetId);
     error GroupedAssetNotFound(bytes32 groupAssetId, bytes32 childAssetId);
     error AssetAlreadyInactive(bytes32 channelName, bytes32 assetId);
     error CannotReactivateAsset(bytes32 channelName, bytes32 assetId);
+    error TransformationChainTooDeep(uint256 current, uint256 maximum);
 
     // =============================================================
     //                    ASSET REGISTRY
