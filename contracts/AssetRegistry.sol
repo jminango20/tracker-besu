@@ -22,6 +22,7 @@ import {
     MAX_TRANSFORMATION_DEPTH
 } from "./lib/Constants.sol";
 import {Utils} from "./lib/Utils.sol";
+import {ChannelAccess} from "./lib/ChannelAccess.sol";
 
 /**
  * @title AssetRegistry
@@ -250,10 +251,11 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert TransferToSameOwner(transfer.channelName, transfer.assetId, transfer.newOwner);
         }
 
-        address originalOwner = asset.owner;
+        ChannelAccess.requireMember(_getAddressDiscovery(), transfer.channelName, transfer.newOwner);
+
+        address currentOwner = asset.owner;
 
         asset.owner = transfer.newOwner;    //New Owner
-        asset.originOwner = originalOwner;   //Track Original
         asset.idLocal = transfer.idLocal;
         asset.operation = AssetOperation.TRANSFER;
         asset.lastUpdated = Utils.timestamp();
@@ -265,7 +267,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
 
         //Update owner enumeration
-        _removeAssetFromOwner(transfer.channelName, transfer.assetId, originalOwner);
+        _removeAssetFromOwner(transfer.channelName, transfer.assetId, currentOwner);
         _addAssetToOwner(transfer.channelName, transfer.assetId, transfer.newOwner);
 
         _addToHistory(transfer.channelName, transfer.assetId, AssetOperation.TRANSFER, Utils.timestamp());
@@ -273,7 +275,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         emit AssetTransferred(
             transfer.channelName,
             transfer.assetId,
-            originalOwner,
+            currentOwner,
             transfer.newOwner,
             transfer.idLocal,
             Utils.timestamp()

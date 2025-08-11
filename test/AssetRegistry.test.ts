@@ -704,5 +704,613 @@ describe.only("AssetRegistry test", function () {
     });
   });
 
+  describe("transferAsset", function () {
+    it("Should allow asset owner to transfer to another channel member", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
 
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transfer to member2
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: [EXTERNAL_ID_2, EXTERNAL_ID_3]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .not.to.be.reverted;
+
+      const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      
+      // Check ownership transfer
+      expect(asset.owner).to.equal(accounts.member2.address);
+      expect(asset.originOwner).to.equal(accounts.member1.address); // Original owner preserved
+      
+      // Check location and data updates
+      expect(asset.idLocal).to.equal(LOCATION_B);
+      expect(asset.dataHashes.length).to.equal(1); // dataHashes NOT updated in transfer
+      expect(asset.dataHashes[0]).to.equal(DATA_HASH_1); // Original dataHashes preserved
+      
+      // Check external IDs replacement
+      expect(asset.externalIds.length).to.equal(2);
+      expect(asset.externalIds[0]).to.equal(EXTERNAL_ID_2);
+      expect(asset.externalIds[1]).to.equal(EXTERNAL_ID_3);
+      
+      // Check operation and timestamps
+      expect(asset.operation).to.equal(2); // TRANSFER
+      expect(asset.lastUpdated).to.be.greaterThan(asset.createdAt);
+      expect(asset.status).to.equal(0); // Still ACTIVE
+    });
+
+    it("Should emit AssetTransferred event", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transfer asset
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.emit(assetRegistry, "AssetTransferred")
+        .withArgs(CHANNEL_1, ASSET_1, accounts.member1.address, accounts.member2.address, LOCATION_B, anyValue);
+    });
+
+    it("Should update owner enumeration mappings correctly", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Verify member1 owns the asset
+      let [member1Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(member1Assets.length).to.equal(1);
+      expect(member1Assets[0]).to.equal(ASSET_1);
+
+      // Verify member2 has no assets
+      let [member2Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member2.address, 1, 10);
+      expect(member2Assets.length).to.equal(0);
+
+      // Transfer asset
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+
+      // Verify ownership changed in enumeration
+      [member1Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(member1Assets.length).to.equal(0);
+
+      [member2Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member2.address, 1, 10);
+      expect(member2Assets.length).to.equal(1);
+      expect(member2Assets[0]).to.equal(ASSET_1);
+    });
+
+    it("Should preserve asset metadata and not modify amounts", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+
+      // Transfer asset
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_3], // This should NOT change dataHashes
+        externalIds: [EXTERNAL_ID_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+      const transferredAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+
+      // These should remain unchanged
+      expect(transferredAsset.amount).to.equal(originalAsset.amount);
+      expect(transferredAsset.assetId).to.equal(originalAsset.assetId);
+      expect(transferredAsset.createdAt).to.equal(originalAsset.createdAt);
+      expect(transferredAsset.status).to.equal(originalAsset.status);
+      
+      // DataHashes should NOT be changed in transfer (only externalIds are replaced)
+      expect(transferredAsset.dataHashes.length).to.equal(2);
+      expect(transferredAsset.dataHashes[0]).to.equal(DATA_HASH_1);
+      expect(transferredAsset.dataHashes[1]).to.equal(DATA_HASH_2);
+      
+      // External IDs should be replaced
+      expect(transferredAsset.externalIds.length).to.equal(1);
+      expect(transferredAsset.externalIds[0]).to.equal(EXTERNAL_ID_2);
+    });
+
+    it("Should handle transfer with empty external IDs", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with external IDs
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: [EXTERNAL_ID_1, EXTERNAL_ID_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transfer with empty external IDs
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: [] // Empty array should clear external IDs
+      };
+
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+
+      const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.externalIds.length).to.equal(0);
+    });
+
+    it("Should handle optional location update", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transfer with new location
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B, // New location provided
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+
+      const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.idLocal).to.equal(LOCATION_B);
+    });
+
+    it("Should revert if asset does not exist", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
+        .withArgs(CHANNEL_1, ASSET_1);
+    });
+
+    it("Should revert if asset is not active", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Inactivate asset
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      // Try to transfer inactive asset
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
+        .withArgs(CHANNEL_1, ASSET_1);
+    });
+
+    it("Should revert if caller is not asset owner", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to transfer with member2 (not owner)
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member2).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
+        .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
+    });
+
+    it("Should revert if transferring to same owner", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to transfer to same owner
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member1.address, // Same as current owner
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "TransferToSameOwner")
+        .withArgs(CHANNEL_1, ASSET_1, accounts.member1.address);
+    });
+
+    it("Should revert if caller is not channel member", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to transfer with non-channel member
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.user).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
+        .withArgs(CHANNEL_1, accounts.user.address);
+    });
+
+    it("Should revert with invalid input validations", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset first
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Test invalid assetId
+      let transferInput = {
+        assetId: hre.ethers.ZeroHash,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
+        .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
+
+      // Test invalid newOwner (zero address)
+      transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: ZeroAddress,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidAddress")
+        .withArgs(ZeroAddress);
+
+      // Test empty location
+      transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: "",
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
+
+      // Test empty dataHashes
+      transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
+    });
+
+    it("Should revert if newOwner is not a channel member", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to transfer to user (not a channel member)
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.user.address, // NOT a channel member!
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
+        .withArgs(CHANNEL_1, accounts.user.address);
+    });
+
+    it("Should add transfer operation to asset history", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transfer asset
+      const transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+
+      const [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
+      
+      expect(operations.length).to.equal(2);
+      expect(operations[0]).to.equal(0); // CREATE
+      expect(operations[1]).to.equal(2); // TRANSFER
+      expect(timestamps.length).to.equal(2);
+      expect(timestamps[1]).to.be.greaterThan(timestamps[0]);
+    });
+
+    it("Should handle multiple consecutive transfers", async function () {
+      const { assetRegistry, accessChannelManager } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // First transfer: member1 -> member2
+      let transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.member2.address,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2],
+        externalIds: [EXTERNAL_ID_2]
+      };
+
+      //CAPTURE FIRST TRANSFER EVENT
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+        .to.emit(assetRegistry, "AssetTransferred")
+        .withArgs(
+          CHANNEL_1, 
+          ASSET_1, 
+          accounts.member1.address,  // fromOwner (current owner)
+          accounts.member2.address,  // toOwner (new owner)
+          LOCATION_B, 
+          anyValue
+        );
+
+      // Verify first transfer state
+      let asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.owner).to.equal(accounts.member2.address);
+      expect(asset.originOwner).to.equal(accounts.member1.address); // Still original owner
+
+      // Add deployer to channel for second transfer
+      await accessChannelManager.connect(accounts.deployer).addChannelMember(CHANNEL_1, accounts.deployer.address);
+
+      // Second transfer: member2 -> deployer
+      transferInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        newOwner: accounts.deployer.address,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_3],
+        externalIds: [EXTERNAL_ID_3]
+      };
+
+      //CAPTURE SECOND TRANSFER EVENT
+      await expect(assetRegistry.connect(accounts.member2).transferAsset(transferInput))
+        .to.emit(assetRegistry, "AssetTransferred")
+        .withArgs(
+          CHANNEL_1, 
+          ASSET_1, 
+          accounts.member2.address,  // fromOwner (current owner)
+          accounts.deployer.address, // toOwner (new owner)
+          LOCATION_A, 
+          anyValue
+        );
+
+      // Verify final transfer state
+      asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.owner).to.equal(accounts.deployer.address);
+      expect(asset.originOwner).to.equal(accounts.member1.address); // Still original owner
+      expect(asset.idLocal).to.equal(LOCATION_A);
+      expect(asset.externalIds[0]).to.equal(EXTERNAL_ID_3);      
+
+      // Check history has 3 operations (CREATE + 2 TRANSFERs)
+      const [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
+      expect(operations.length).to.equal(3);
+      expect(operations[0]).to.equal(0); // CREATE
+      expect(operations[1]).to.equal(2); // TRANSFER
+      expect(operations[2]).to.equal(2); // TRANSFER
+
+      // Check owner enumeration
+      let [member1Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(member1Assets.length).to.equal(0);
+
+      let [member2Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member2.address, 1, 10);
+      expect(member2Assets.length).to.equal(0);
+
+      let [deployerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.deployer.address, 1, 10);
+      expect(deployerAssets.length).to.equal(1);
+      expect(deployerAssets[0]).to.equal(ASSET_1);
+    });
+  });
 });
