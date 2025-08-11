@@ -53,3 +53,38 @@ export const NATURE_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NATURE_1"))
 export const NATURE_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NATURE_2"));
 export const STAGE_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("STAGE_1"));
 export const STAGE_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("STAGE_2"));
+
+
+/**
+ * ASSET REGISTRY
+ */
+export const ASSET_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_ADMIN_ROLE"));
+
+// Define test asset IDs
+export const ASSET_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_1"));
+export const ASSET_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_2"));
+export const ASSET_GROUP_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_GROUP_1"));
+export const NON_EXISTENT_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NON_EXISTENT_ASSET"));
+
+// Define test transformation IDs
+export const TRANSFORMATION_1 = "BEEF-PROCESSING";
+export const TRANSFORMATION_2 = "DAIRY-PROCESSING";
+
+// Define test amounts
+export const DEFAULT_AMOUNT = 100;
+export const SPLIT_AMOUNT_1 = 40;
+export const SPLIT_AMOUNT_2 = 60;
+
+// Define test locations
+export const LOCATION_A = "Location-A";
+export const LOCATION_B = "Location-B"; 
+export const LOCATION_C = "Location-C";
+
+// Define additional data hashes for testing
+export const DATA_HASH_3 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("data_hash_3"));
+export const DATA_HASH_4 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("data_hash_4"));
+
+// Define external IDs for testing
+export const EXTERNAL_ID_1 = "EXT-001";
+export const EXTERNAL_ID_2 = "EXT-002";
+export const EXTERNAL_ID_3 = "EXT-003";
