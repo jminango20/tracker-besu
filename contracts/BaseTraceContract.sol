@@ -3,22 +3,20 @@ pragma solidity ^0.8.20;
 
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IAccessChannelManager} from "./interfaces/IAccessChannelManager.sol";
 import {IAddressDiscovery} from "./interfaces/IAddressDiscovery.sol";
-import {
-    INVALID_PAGE,
-    FIRST_PAGE,
-    MAX_PAGE_SIZE,
-    DEFAULT_ADMIN_ROLE,
-    ACCESS_CHANNEL_MANAGER
-} from "./lib/Constants.sol";
+import {ChannelAccess} from "./lib/ChannelAccess.sol";
+import {Pagination} from "./lib/Pagination.sol";
+import {AddressDiscoveryHelper} from "./lib/AddressDiscoveryHelper.sol";
+import {DEFAULT_ADMIN_ROLE} from "./lib/Constants.sol";
 
 /**
  * @title BaseTraceContract
  * @notice Abstract contract providing common functionality for all trace contracts
  * @dev Base contract that all trace system contracts should inherit from
  */
-abstract contract BaseTraceContract is Context, AccessControl {
+abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
 
     // =============================================================
     //                        INTERFACES
@@ -35,9 +33,6 @@ abstract contract BaseTraceContract is Context, AccessControl {
 
     error InvalidAddress(address addr);
     error InvalidChannelName(bytes32 channelName);
-    error UnauthorizedChannelAccess(bytes32 channelName, address caller);
-    error InvalidPageNumber(uint256 page);
-    error InvalidPageSize(uint256 pageSize);
    
     // =============================================================
     //                       CONSTRUCTOR
@@ -49,7 +44,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
      */
     constructor(address addressDiscovery) {
 
-        if (addressDiscovery == address(0)) revert InvalidAddress(addressDiscovery);
+        AddressDiscoveryHelper.validateAddress(addressDiscovery);
        
         _addressDiscovery = IAddressDiscovery(addressDiscovery);
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());        
@@ -64,7 +59,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
      * @param channelName The name of the channel to check membership for
      */
     modifier onlyChannelMember(bytes32 channelName) {
-        _requireChannelMember(channelName, _msgSender());
+        ChannelAccess.requireMember(_addressDiscovery, channelName, _msgSender());
         _;
     }
 
@@ -83,8 +78,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
      * @param pageSize Number of items per page
      */
     modifier validPagination(uint256 page, uint256 pageSize) {
-        if (page == INVALID_PAGE) revert InvalidPageNumber(page);
-        if (pageSize == INVALID_PAGE || pageSize > MAX_PAGE_SIZE) revert InvalidPageSize(pageSize);
+        Pagination.validate(page, pageSize);
         _;
     }
 
@@ -93,7 +87,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
      * @param addr Address to validate
      */
     modifier validAddress(address addr) {
-        if (addr == address(0)) revert InvalidAddress(addr);
+        AddressDiscoveryHelper.validateAddress(addr);
         _;
     }
 
@@ -114,7 +108,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
         validAddress(account)
         returns (bool) 
     {
-        return _getAccessChannelManager().isChannelMember(channelName, account);
+        return ChannelAccess.isMember(_getAddressDiscovery(), channelName, account);
     }
 
     // =============================================================
@@ -126,6 +120,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
      * @param addressDiscoveryAdd Address of the address discovery contract
      */
     function _setAddressDiscovery(address addressDiscoveryAdd) internal {
+        AddressDiscoveryHelper.validateAddress(addressDiscoveryAdd);
         _addressDiscovery = IAddressDiscovery(addressDiscoveryAdd);
     }
 
@@ -135,28 +130,6 @@ abstract contract BaseTraceContract is Context, AccessControl {
      */
     function _getAddressDiscovery() internal view returns (IAddressDiscovery) {
         return _addressDiscovery;
-    }
-
-    /**
-     * Gets the access channel manager instance
-     * @return The access channel manager contract
-     */
-    function _getAccessChannelManager() internal view returns (IAccessChannelManager) {
-        return IAccessChannelManager(_addressDiscovery.getContractAddress(ACCESS_CHANNEL_MANAGER));
-    }
-
-    /**
-     * Requires that caller is a member of the specified channel
-     * @param channelName The name of the channel to check membership for
-     * @param member Account to check
-     */
-    function _requireChannelMember(bytes32 channelName, address member) internal view {
-        if (channelName == bytes32(0)) revert InvalidChannelName(channelName);
-        
-        IAccessChannelManager accessChannelManager = _getAccessChannelManager();
-        if (!accessChannelManager.isChannelMember(channelName, member)) {
-            revert UnauthorizedChannelAccess(channelName, member);
-        }
     }
 
     /**
@@ -183,38 +156,7 @@ abstract contract BaseTraceContract is Context, AccessControl {
             bool hasNextPage
         )
     {
-        if (totalItems == 0) {
-            return (0, 0, 0, false);
-        }
-        
-        totalPages = (totalItems + pageSize - FIRST_PAGE) / pageSize; // Ceiling division
-        
-        if (page > totalPages) {
-            return (0, 0, totalPages, false);
-        }
-        
-        startIndex = (page - FIRST_PAGE) * pageSize;
-        endIndex = startIndex + pageSize;
-        if (endIndex > totalItems) {
-            endIndex = totalItems;
-        }
-        
-        hasNextPage = page < totalPages;
-    }
-
-    /**
-     * Generates a unique ID based on multiple parameters
-     * @param param1 First parameter
-     * @param param2 Second parameter
-     * @param param3 Third parameter
-     * @return Unique bytes32 ID
-     */
-    function _generateId(
-        bytes32 param1,
-        bytes32 param2,
-        bytes32 param3
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(param1, param2, param3));
+        return Pagination.calculate(totalItems, page, pageSize);
     }
 
     // =============================================================

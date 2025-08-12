@@ -191,18 +191,6 @@ interface IProcessRegistry {
         bytes32 stageId
     ) external view returns (bool active);
 
-    /**
-     * Get all processes with a specific processId in a channel
-     * @dev Useful when you know processId but not nature/stage combinations
-     * @param processId The process identifier
-     * @param channelName The channel name
-     * @return processes Array of all processes with this processId
-     */
-    function getProcessesByProcessId(
-        bytes32 processId, 
-        bytes32 channelName
-    ) external view returns (Process[] memory processes);
-
     // =============================================================
     // FUNCTION TO BE CALLED BY PROCESS SUBMISSION
     // =============================================================
