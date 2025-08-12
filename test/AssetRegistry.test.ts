@@ -9,6 +9,7 @@ import {
   ASSET_ADMIN_ROLE,
   CHANNEL_1,
   ASSET_1,
+  ASSET_2,
   DATA_HASH_1,
   DATA_HASH_2,
   DATA_HASH_3,
@@ -1311,6 +1312,669 @@ describe.only("AssetRegistry test", function () {
       let [deployerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.deployer.address, 1, 10);
       expect(deployerAssets.length).to.equal(1);
       expect(deployerAssets[0]).to.equal(ASSET_1);
+    });
+  });
+
+  describe("transformAsset", function () {
+    it("Should allow asset owner to transform asset with new amount", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create original asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transform asset
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "BEEF-PROCESSING",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT + 50, // New amount
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2, DATA_HASH_3]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .not.to.be.reverted;
+
+      // Check original asset is now inactive
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(originalAsset.status).to.equal(1); // INACTIVE
+      expect(originalAsset.operation).to.equal(7); // TRANSFORM
+      expect(originalAsset.lastUpdated).to.be.greaterThan(originalAsset.createdAt);
+
+      // Find the new asset ID (should be in childAssets of original)
+      expect(originalAsset.childAssets.length).to.equal(1);
+      const newAssetId = originalAsset.childAssets[0];
+
+      // Check new transformed asset
+      const newAsset = await assetRegistry.getAsset(CHANNEL_1, newAssetId);
+      expect(newAsset.assetId).to.equal(newAssetId);
+      expect(newAsset.owner).to.equal(accounts.member1.address); // Inherited owner
+      expect(newAsset.amount).to.equal(DEFAULT_AMOUNT + 50); // New amount
+      expect(newAsset.idLocal).to.equal(LOCATION_B);
+      expect(newAsset.status).to.equal(0); // ACTIVE
+      expect(newAsset.operation).to.equal(7); // TRANSFORM
+      expect(newAsset.parentAssetId).to.equal(ASSET_1);
+      expect(newAsset.transformationId).to.equal("BEEF-PROCESSING");
+      expect(newAsset.originOwner).to.equal(accounts.member1.address); // Inherited
+      
+      // Check data hashes replacement
+      expect(newAsset.dataHashes.length).to.equal(2);
+      expect(newAsset.dataHashes[0]).to.equal(DATA_HASH_2);
+      expect(newAsset.dataHashes[1]).to.equal(DATA_HASH_3);
+
+      // Check that external IDs are inherited
+      expect(newAsset.externalIds.length).to.equal(1);
+      expect(newAsset.externalIds[0]).to.equal(EXTERNAL_ID_1);
+    });
+
+    it("Should inherit amount from original when new amount is zero", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create original asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transform with amount = 0 (should inherit)
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "DAIRY-PROCESSING",
+        channelName: CHANNEL_1,
+        amount: 0, // Should inherit original amount
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const newAssetId = originalAsset.childAssets[0];
+      const newAsset = await assetRegistry.getAsset(CHANNEL_1, newAssetId);
+
+      expect(newAsset.amount).to.equal(DEFAULT_AMOUNT); // Inherited amount
+    });
+
+    it("Should emit AssetTransformed event", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transform asset
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "PROCESSING-001",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      // The event should emit with original assetId and generated new assetId
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.emit(assetRegistry, "AssetTransformed")
+        .withArgs(ASSET_1, anyValue, accounts.member1.address, "PROCESSING-001", anyValue);
+    });
+
+    it("Should inherit grouping state from original asset", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create multiple assets for grouping
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // Group assets
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_ASSET"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Transform the group asset
+      const transformInput = {
+        assetId: GROUP_ASSET,
+        transformationId: "GROUP-PROCESSING",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT + 20,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+
+      // Check that new asset inherited grouped assets
+      const originalGroup = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
+      const newAssetId = originalGroup.childAssets[0];
+      const newAsset = await assetRegistry.getAsset(CHANNEL_1, newAssetId);
+
+      expect(newAsset.groupedAssets.length).to.equal(2);
+      expect(newAsset.groupedAssets[0]).to.equal(ASSET_1);
+      expect(newAsset.groupedAssets[1]).to.equal(ASSET_2);
+    });
+
+    it("Should update asset status and owner enumeration correctly", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Check initial status enumeration
+      let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10); // ACTIVE
+      expect(activeAssets.length).to.equal(1);
+      expect(activeAssets[0]).to.equal(ASSET_1);
+
+      let [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10); // INACTIVE
+      expect(inactiveAssets.length).to.equal(0);
+
+      // Transform asset
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "STATUS-TEST",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+
+      // Check status enumeration after transform
+      [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10); // ACTIVE
+      expect(activeAssets.length).to.equal(1); // Only new asset is active
+
+      [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10); // INACTIVE
+      expect(inactiveAssets.length).to.equal(1); // Original asset is now inactive
+      expect(inactiveAssets[0]).to.equal(ASSET_1);
+
+      // Check owner enumeration (member1 should still have 1 asset - the new one)
+      const [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(ownerAssets.length).to.equal(1);
+
+      // The new asset should be in member1's assets
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const newAssetId = originalAsset.childAssets[0];
+      expect(ownerAssets[0]).to.equal(newAssetId);
+    });
+
+    it("Should add transform operations to both assets history", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transform asset
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "HISTORY-TEST",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+
+      // Check original asset history
+      let [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
+      expect(operations.length).to.equal(2);
+      expect(operations[0]).to.equal(0); // CREATE
+      expect(operations[1]).to.equal(7); // TRANSFORM
+
+      // Check new asset history
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const newAssetId = originalAsset.childAssets[0];
+      [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, newAssetId);
+      expect(operations.length).to.equal(1);
+      expect(operations[0]).to.equal(7); // TRANSFORM
+    });
+
+    it("Should revert if asset does not exist", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "NON-EXISTENT-TEST",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
+        .withArgs(CHANNEL_1, ASSET_1);
+    });
+
+    it("Should revert if asset is not active", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Inactivate asset
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      // Try to transform inactive asset
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "INACTIVE-TEST",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
+        .withArgs(CHANNEL_1, ASSET_1);
+    });
+
+    it("Should revert if caller is not asset owner", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to transform with member2 (not owner)
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "OWNERSHIP-TEST",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await expect(assetRegistry.connect(accounts.member2).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
+        .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
+    });
+
+    it("Should revert if caller is not channel member", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to transform with non-channel member
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "CHANNEL-TEST",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await expect(assetRegistry.connect(accounts.user).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
+        .withArgs(CHANNEL_1, accounts.user.address);
+    });
+
+    it("Should revert with invalid input validations", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset first
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Test invalid assetId
+      let transformInput = {
+        assetId: hre.ethers.ZeroHash,
+        transformationId: "VALID-ID",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
+        .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
+
+      // Test empty transformationId
+      transformInput = {
+        assetId: ASSET_1,
+        transformationId: "",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidTransformationId");
+
+      // Test very long transformationId (>64 chars)
+      transformInput = {
+        assetId: ASSET_1,
+        transformationId: "A".repeat(65), // 65 characters
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidTransformationId");
+
+      // Test empty location
+      transformInput = {
+        assetId: ASSET_1,
+        transformationId: "VALID-ID",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: "",
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
+
+      // Test empty dataHashes
+      transformInput = {
+        assetId: ASSET_1,
+        transformationId: "VALID-ID",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: []
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
+    });
+
+    it("Should handle transformation chains and prevent infinite depth", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create original asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      let currentAssetId = ASSET_1;
+
+      // Perform multiple transformations to test depth limit
+      // MAX_TRANSFORMATION_DEPTH is 10
+      for (let i = 1; i <= 5; i++) { // Test 5 levels
+        const transformInput = {
+          assetId: currentAssetId,
+          transformationId: `LEVEL-${i}`,
+          channelName: CHANNEL_1,
+          amount: DEFAULT_AMOUNT + (i * 10),
+          idLocal: LOCATION_A,
+          dataHashes: [DATA_HASH_1]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+          .not.to.be.reverted;
+
+        // Get the new asset ID for next iteration
+        const asset = await assetRegistry.getAsset(CHANNEL_1, currentAssetId);
+        expect(asset.status).to.equal(1); // Should be INACTIVE
+        expect(asset.childAssets.length).to.equal(1);
+        
+        currentAssetId = asset.childAssets[0];
+        
+        // Verify the new asset
+        const newAsset = await assetRegistry.getAsset(CHANNEL_1, currentAssetId);
+        expect(newAsset.status).to.equal(0); // Should be ACTIVE
+        expect(newAsset.transformationId).to.equal(`LEVEL-${i}`);
+      }
+
+      // Verify transformation chain using getTransformationHistory
+      const transformationChain = await assetRegistry.getTransformationHistory(CHANNEL_1, currentAssetId);
+      expect(transformationChain.length).to.be.greaterThan(1);
+      expect(transformationChain[0]).to.equal(ASSET_1);
+    });
+
+    it("Should revert if transformation would exceed max depth", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        // Create original asset
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        let currentAssetId = ASSET_1;
+
+        //Fazer 20 transformações (que devem passar)
+        for (let i = 1; i <= 20; i++) {
+            const transformInput = {
+                assetId: currentAssetId,
+                transformationId: `DEPTH-LEVEL-${i}`,
+                channelName: CHANNEL_1,
+                amount: DEFAULT_AMOUNT + i,
+                idLocal: LOCATION_A,
+                dataHashes: [DATA_HASH_1]
+            };
+
+            //Transformações 1-20 devem passar
+            await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+                .not.to.be.reverted;
+
+            const asset = await assetRegistry.getAsset(CHANNEL_1, currentAssetId);
+            expect(asset.childAssets.length).to.equal(1);
+            currentAssetId = asset.childAssets[0];
+
+            const newAsset = await assetRegistry.getAsset(CHANNEL_1, currentAssetId);
+            expect(newAsset.transformationId).to.equal(`DEPTH-LEVEL-${i}`);
+            expect(newAsset.status).to.equal(0); // ACTIVE
+        }
+
+        //A 21ª transformação (depth 21) deve falhar
+        const exceedDepthTransform = {
+            assetId: currentAssetId,
+            transformationId: "DEPTH-LEVEL-21-SHOULD-FAIL",
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT + 21,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).transformAsset(exceedDepthTransform))
+            .to.be.revertedWithCustomError(assetRegistry, "TransformationChainTooDeep")
+            .withArgs(21, 20); //(currentDepth + 1, maxDepth)
+
+        //Verificar chain tem 21 assets (original + 20 transformações)
+        const transformationChain = await assetRegistry.getTransformationHistory(CHANNEL_1, currentAssetId);
+        expect(transformationChain.length).to.equal(21);
+        
+        expect(transformationChain[0]).to.equal(ASSET_1); // Original primeiro
+        expect(transformationChain[20]).to.equal(currentAssetId); // 20ª transformação por último
+
+        const finalAsset = await assetRegistry.getAsset(CHANNEL_1, currentAssetId);
+        expect(finalAsset.status).to.equal(0); // Still ACTIVE
+        expect(finalAsset.transformationId).to.equal("DEPTH-LEVEL-20"); //Última válida
+    });
+
+    it("Should generate unique asset IDs for transformations", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create two identical assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // Transform both with same transformationId
+      const transformInput1 = {
+        assetId: ASSET_1,
+        transformationId: "IDENTICAL-PROCESSING",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      const transformInput2 = {
+        assetId: ASSET_2,
+        transformationId: "IDENTICAL-PROCESSING",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput1);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput2);
+
+      // Get the new asset IDs
+      const asset1 = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const asset2 = await assetRegistry.getAsset(CHANNEL_1, ASSET_2);
+
+      const newAssetId1 = asset1.childAssets[0];
+      const newAssetId2 = asset2.childAssets[0];
+
+      // Asset IDs should be different despite same transformationId
+      expect(newAssetId1).not.to.equal(newAssetId2);
+      
+      // But both should have same transformationId
+      const newAsset1 = await assetRegistry.getAsset(CHANNEL_1, newAssetId1);
+      const newAsset2 = await assetRegistry.getAsset(CHANNEL_1, newAssetId2);
+      
+      expect(newAsset1.transformationId).to.equal("IDENTICAL-PROCESSING");
+      expect(newAsset2.transformationId).to.equal("IDENTICAL-PROCESSING");
     });
   });
 });

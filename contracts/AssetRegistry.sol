@@ -308,8 +308,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
 
         uint256 currentDepth = _getTransformationDepth(transform.channelName, transform.assetId);
-        if (currentDepth >= MAX_TRANSFORMATION_DEPTH) {
-            revert TransformationChainTooDeep(currentDepth, MAX_TRANSFORMATION_DEPTH);
+        if (currentDepth + 1 > MAX_TRANSFORMATION_DEPTH) {
+            revert TransformationChainTooDeep(currentDepth + 1, MAX_TRANSFORMATION_DEPTH);
         }
 
         //1. Gerar novo asset ID
@@ -324,9 +324,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
 
         //2. Inativar original asset
+        _removeAssetFromOwner(transform.channelName, transform.assetId, originalAsset.owner);
+        _updateAssetInStatusEnumeration(transform.channelName, transform.assetId, AssetStatus.INACTIVE);
+        
         originalAsset.status = AssetStatus.INACTIVE;
         originalAsset.operation = AssetOperation.TRANSFORM;
         originalAsset.lastUpdated = Utils.timestamp();
+
 
         //3. Criar Novo Asset
         Asset storage newAsset = _assetsByChannel[transform.channelName][newAssetId];
@@ -344,7 +348,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         for (uint256 i = 0; i < originalAsset.externalIds.length; i++) {
             newAsset.externalIds.push(originalAsset.externalIds[i]);
         }
-
+        
         //3.1 Novos campos de transformação do novo asset
         newAsset.parentAssetId = transform.assetId;
         newAsset.transformationId = transform.transformationId;
@@ -371,7 +375,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         //5. Atualizar Mapeamentos
         _addAssetToOwner(transform.channelName, newAssetId, newAsset.owner);
         _addAssetToStatus(transform.channelName, newAssetId, AssetStatus.ACTIVE);
-        _updateAssetInStatusEnumeration(transform.channelName, transform.assetId, AssetStatus.INACTIVE);
         
         _addToHistory(transform.channelName, transform.assetId, AssetOperation.TRANSFORM, Utils.timestamp());
         _addToHistory(transform.channelName, newAssetId, AssetOperation.TRANSFORM, Utils.timestamp());
@@ -1047,11 +1050,11 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     function _buildTransformationChain(bytes32 channelName, bytes32 assetId) 
         internal view returns (bytes32[] memory chain) 
     {
-        bytes32[] memory tempChain = new bytes32[](MAX_TRANSFORMATION_DEPTH);
+        bytes32[] memory tempChain = new bytes32[](MAX_TRANSFORMATION_DEPTH + 1);
         uint256 count = 0;
         bytes32 currentId = assetId;
         
-        while (currentId != bytes32(0) && count < MAX_TRANSFORMATION_DEPTH) {
+        while (currentId != bytes32(0) && count < MAX_TRANSFORMATION_DEPTH + 1) {
             tempChain[count] = currentId;
             currentId = _parentAssetByChannel[channelName][currentId];
             count++;
@@ -1183,5 +1186,50 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     function getVersion() external pure override returns (string memory) {
         return "1.0.0";
+    }
+
+    // ✅ FUNÇÕES DEBUG TEMPORÁRIAS
+    function debugTransformationDepth(bytes32 channelName, bytes32 assetId) 
+        external 
+        view 
+        returns (uint256) 
+    {
+        return _getTransformationDepth(channelName, assetId);
+    }
+
+    function debugGetParent(bytes32 channelName, bytes32 assetId) 
+        external 
+        view 
+        returns (bytes32) 
+    {
+        return _parentAssetByChannel[channelName][assetId];
+    }
+
+    function debugBuildChainDetails(bytes32 channelName, bytes32 assetId) 
+        external 
+        view 
+        returns (
+            bytes32[] memory fullChain,
+            uint256 actualCount,
+            bytes32 currentId,
+            uint256 maxDepth
+        ) 
+    {
+        bytes32[] memory tempChain = new bytes32[](MAX_TRANSFORMATION_DEPTH);
+        uint256 count = 0;
+        currentId = assetId;
+        maxDepth = MAX_TRANSFORMATION_DEPTH;
+        
+        while (currentId != bytes32(0) && count < MAX_TRANSFORMATION_DEPTH) {
+            tempChain[count] = currentId;
+            currentId = _parentAssetByChannel[channelName][currentId];
+            count++;
+        }
+        
+        actualCount = count;
+        fullChain = new bytes32[](count);
+        for (uint256 i = 0; i < count; i++) {
+            fullChain[i] = tempChain[count - 1 - i];
+        }
     }
 }
