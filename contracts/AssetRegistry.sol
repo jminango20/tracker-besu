@@ -602,18 +602,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         for (uint256 i = 0; i < ungroupedAssetIds.length; i++) {
             bytes32 childAssetId = ungroupedAssetIds[i];
             
-            // Verificar se asset filho existe
+            //1.1 Verificar se asset filho existe
             if (!_assetExistsByChannel[ungroup.channelName][childAssetId]) {
                 revert GroupedAssetNotFound(ungroup.assetId, childAssetId);
             }
             
             Asset storage childAsset = _assetsByChannel[ungroup.channelName][childAssetId];
-            
-            //1.1 Reativar asset filho
-            childAsset.status = AssetStatus.ACTIVE;
-            childAsset.operation = AssetOperation.UNGROUP;
-            childAsset.lastUpdated = Utils.timestamp();
-            
+                        
             //1.2 Aplicar novos dados ao asset filho (se fornecidos)
             if (ungroup.dataHash != bytes32(0)) {
                 // Substituir dataHashes com novo hash
@@ -629,18 +624,26 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             //1.3 Desvincular asset filho do grupo
             childAsset.groupedBy = bytes32(0);  // Não está mais agrupado
             
-            //1.4 Atualizar status e history
-            _updateAssetInStatusEnumeration(ungroup.channelName, childAssetId, AssetStatus.ACTIVE);
+            //1.4 Atualizar status e history e Reativar asset filho
+            _updateAssetInStatusEnumeration(ungroup.channelName, childAssetId, AssetStatus.ACTIVE);            
+            
+            childAsset.status = AssetStatus.ACTIVE;
+            childAsset.operation = AssetOperation.UNGROUP;
+            childAsset.lastUpdated = Utils.timestamp();
+
+            _addAssetToOwner(ungroup.channelName, childAssetId, childAsset.owner);
             _addToHistory(ungroup.channelName, childAssetId, AssetOperation.UNGROUP, Utils.timestamp());
         }
 
-        //2. Inactivate asset grupo
+        //2. Remove and Inactivate asset grupo
+        _removeAssetFromOwner(ungroup.channelName, ungroup.assetId, groupAsset.owner);
+        _updateAssetInStatusEnumeration(ungroup.channelName, ungroup.assetId, AssetStatus.INACTIVE);
+        
         groupAsset.status = AssetStatus.INACTIVE;
         groupAsset.operation = AssetOperation.UNGROUP;
         groupAsset.lastUpdated = Utils.timestamp();
         
         //3. Atualizar status e history
-        _updateAssetInStatusEnumeration(ungroup.channelName, ungroup.assetId, AssetStatus.INACTIVE);
         _addToHistory(ungroup.channelName, ungroup.assetId, AssetOperation.UNGROUP, Utils.timestamp());
         
         emit AssetsUngrouped(

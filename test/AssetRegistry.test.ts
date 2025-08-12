@@ -3332,4 +3332,840 @@ describe.only("AssetRegistry test", function () {
       expect(groupedAsset2.lastUpdated).to.be.greaterThan(originalAsset2.lastUpdated);
     });
   });
+
+  describe("ungroupAssets", function () {
+    it("Should allow group owner to ungroup assets and reactivate them", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create multiple assets to group
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: [EXTERNAL_ID_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // Group assets first
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("UNGROUP_TEST"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Verify assets are grouped and inactive
+      const asset1BeforeUngroup = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const asset2BeforeUngroup = await assetRegistry.getAsset(CHANNEL_1, ASSET_2);
+      expect(asset1BeforeUngroup.status).to.equal(1); // INACTIVE
+      expect(asset1BeforeUngroup.groupedBy).to.equal(GROUP_ASSET);
+      expect(asset2BeforeUngroup.status).to.equal(1); // INACTIVE
+      expect(asset2BeforeUngroup.groupedBy).to.equal(GROUP_ASSET);
+
+      // Ungroup assets
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_A,
+        dataHash: DATA_HASH_4
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+        .not.to.be.reverted;
+
+      // Check group asset is now inactive
+      const groupAsset = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
+      expect(groupAsset.status).to.equal(1); // INACTIVE
+      expect(groupAsset.operation).to.equal(6); // UNGROUP
+      expect(groupAsset.lastUpdated).to.be.greaterThan(groupAsset.createdAt);
+
+      // Check original assets are reactivated
+      const asset1AfterUngroup = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const asset2AfterUngroup = await assetRegistry.getAsset(CHANNEL_1, ASSET_2);
+      
+      expect(asset1AfterUngroup.status).to.equal(0); // ACTIVE
+      expect(asset1AfterUngroup.operation).to.equal(6); // UNGROUP
+      expect(asset1AfterUngroup.groupedBy).to.equal(hre.ethers.ZeroHash); // No longer grouped
+      expect(asset1AfterUngroup.lastUpdated).to.be.greaterThan(asset1BeforeUngroup.lastUpdated);
+      
+      expect(asset2AfterUngroup.status).to.equal(0); // ACTIVE
+      expect(asset2AfterUngroup.operation).to.equal(6); // UNGROUP
+      expect(asset2AfterUngroup.groupedBy).to.equal(hre.ethers.ZeroHash); // No longer grouped
+      expect(asset2AfterUngroup.lastUpdated).to.be.greaterThan(asset2BeforeUngroup.lastUpdated);
+
+      // Check optional updates were applied
+      expect(asset1AfterUngroup.dataHashes.length).to.equal(1);
+      expect(asset1AfterUngroup.dataHashes[0]).to.equal(DATA_HASH_4);
+      expect(asset1AfterUngroup.idLocal).to.equal(LOCATION_A);
+      
+      expect(asset2AfterUngroup.dataHashes.length).to.equal(1);
+      expect(asset2AfterUngroup.dataHashes[0]).to.equal(DATA_HASH_4);
+      expect(asset2AfterUngroup.idLocal).to.equal(LOCATION_A);
+
+      // Verify assets are now active
+      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.true;
+      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_2)).to.be.true;
+      expect(await assetRegistry.isAssetActive(CHANNEL_1, GROUP_ASSET)).to.be.false;
+    });
+
+    it("Should emit AssetsUngrouped event", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create and group assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: SPLIT_AMOUNT_1,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: SPLIT_AMOUNT_2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("EVENT_UNGROUP"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Ungroup and check event
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+        .to.emit(assetRegistry, "AssetsUngrouped")
+        .withArgs(GROUP_ASSET, [ASSET_1, ASSET_2], accounts.member1.address, anyValue);
+    });
+
+    it("Should handle ungroup without optional data updates", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create and group assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NO_UPDATE_GROUP"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Ungroup without providing optional updates
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash, // No update
+        idLocal: "" // No update
+      };
+
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+
+      // Check original data is preserved
+      const restoredAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(restoredAsset.dataHashes.length).to.equal(1);
+      expect(restoredAsset.dataHashes[0]).to.equal(DATA_HASH_1); // Original preserved
+      expect(restoredAsset.idLocal).to.equal(LOCATION_A); // Original preserved
+      expect(restoredAsset.status).to.equal(0); // ACTIVE
+      expect(restoredAsset.groupedBy).to.equal(hre.ethers.ZeroHash);
+    });
+
+    it("Should update owner and status enumerations correctly", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create multiple assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // Group assets
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ENUM_TEST"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Check state after grouping
+      let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
+      expect(activeAssets.length).to.equal(1); // Only group asset
+
+      let [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
+      expect(inactiveAssets.length).to.equal(2); // 2 grouped assets
+
+      let [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(ownerAssets.length).to.equal(1); // Only group asset
+
+      // Ungroup assets
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+
+      // Check final state
+      [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
+      expect(activeAssets.length).to.equal(2); // Original assets back
+
+      [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
+      expect(inactiveAssets.length).to.equal(1); // Only group asset
+
+      [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(ownerAssets.length).to.equal(2); // Original assets back (group removed from owner enumeration)
+
+      // Verify specific assets are in correct status
+      expect(ownerAssets).to.include(ASSET_1);
+      expect(ownerAssets).to.include(ASSET_2);
+      expect(ownerAssets).to.not.include(GROUP_ASSET);
+    });
+
+    it("Should add ungroup operations to asset history", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create and group assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("HISTORY_TEST"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Ungroup assets
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+
+      // Check group asset history
+      let [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, GROUP_ASSET);
+      expect(operations.length).to.equal(2);
+      expect(operations[0]).to.equal(5); // GROUP
+      expect(operations[1]).to.equal(6); // UNGROUP
+
+      // Check original assets history
+      [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
+      expect(operations.length).to.equal(3);
+      expect(operations[0]).to.equal(0); // CREATE
+      expect(operations[1]).to.equal(5); // GROUP
+      expect(operations[2]).to.equal(6); // UNGROUP
+
+      [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_2);
+      expect(operations.length).to.equal(3);
+      expect(operations[0]).to.equal(0); // CREATE
+      expect(operations[1]).to.equal(5); // GROUP
+      expect(operations[2]).to.equal(6); // UNGROUP
+    });
+
+    it("Should revert if group asset does not exist", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      const ungroupInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
+        .withArgs(CHANNEL_1, ASSET_1);
+    });
+
+    it("Should revert if group asset is not active", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create and group assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("INACTIVE_GROUP"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Inactivate group asset
+      const inactivateInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_A,
+        finalDataHash: DATA_HASH_3
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      // Try to ungroup inactive asset
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
+        .withArgs(CHANNEL_1, GROUP_ASSET);
+    });
+
+    it("Should revert if caller is not group asset owner", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create assets with member1
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // Group with member1
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("OWNER_TEST"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Try to ungroup with member2 (not owner)
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.member2).ungroupAssets(ungroupInput))
+        .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
+        .withArgs(CHANNEL_1, GROUP_ASSET, accounts.member2.address);
+    });
+
+    it("Should revert if caller is not channel member", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create and group assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CHANNEL_TEST"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Try to ungroup with non-channel member
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.user).ungroupAssets(ungroupInput))
+        .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
+        .withArgs(CHANNEL_1, accounts.user.address);
+    });
+
+    it("Should revert if asset is not a group (has no grouped assets)", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create a regular asset (not a group)
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to ungroup a non-group asset
+      const ungroupInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotGrouped")
+        .withArgs(ASSET_1);
+    });
+
+    it("Should revert if asset was already ungrouped", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create and group assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ALREADY_UNGROUPED"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // First ungroup (should succeed)
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+
+      // Try to ungroup again (should fail)
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive");
+    });
+
+    it("Should revert with invalid input validations", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Test invalid assetId
+      const ungroupInput = {
+        assetId: hre.ethers.ZeroHash,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
+        .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
+
+      // Test invalid channelName
+      const ungroupInput2 = {
+        assetId: ASSET_1,
+        channelName: hre.ethers.ZeroHash,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidChannelName")
+        .withArgs(hre.ethers.ZeroHash);
+    });
+
+    it("Should handle large groups efficiently", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create multiple assets (up to MAX_GROUP_SIZE)
+      const assetIds = [];
+      const dataHashes = [];
+      
+      for (let i = 0; i < 5; i++) { // Using 5 for efficiency in tests
+        const assetId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes(`LARGE_ASSET_${i}`));
+        const dataHash = `0x${(i + 1).toString().padStart(64, '0')}`;
+        
+        assetIds.push(assetId);
+        dataHashes.push(dataHash);
+        
+        const createInput = {
+          assetId: assetId,
+          channelName: CHANNEL_1,
+          amount: DEFAULT_AMOUNT / 5,
+          idLocal: LOCATION_A,
+          dataHashes: [dataHash],
+          externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      }
+
+      // Group all assets
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("LARGE_GROUP"));
+      const groupInput = {
+        assetIds: assetIds,
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Ungroup all assets
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: DATA_HASH_2,
+        idLocal: LOCATION_A
+      };
+
+      const tx = await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+      const receipt = await tx.wait();
+      
+      expect(receipt?.gasUsed).to.be.lessThan(5000000); // Reasonable gas limit
+
+      // Verify all assets were reactivated
+      for (let i = 0; i < assetIds.length; i++) {
+        const asset = await assetRegistry.getAsset(CHANNEL_1, assetIds[i]);
+        expect(asset.status).to.equal(0); // ACTIVE
+        expect(asset.operation).to.equal(6); // UNGROUP
+        expect(asset.groupedBy).to.equal(hre.ethers.ZeroHash);
+        expect(asset.dataHashes[0]).to.equal(DATA_HASH_2); // Updated
+        expect(asset.idLocal).to.equal(LOCATION_A); // Updated
+      }
+    });
+
+    it("Should preserve asset metadata correctly after ungroup", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with metadata
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+
+      // Group the asset
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("METADATA_TEST"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Ungroup without optional updates
+      const ungroupInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+
+      // Check preserved metadata
+      const restoredAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      
+      expect(restoredAsset.owner).to.equal(originalAsset.owner);
+      expect(restoredAsset.originOwner).to.equal(originalAsset.originOwner);
+      expect(restoredAsset.amount).to.equal(originalAsset.amount);
+      expect(restoredAsset.createdAt).to.equal(originalAsset.createdAt);
+      expect(restoredAsset.assetId).to.equal(originalAsset.assetId);
+      expect(restoredAsset.externalIds.length).to.equal(originalAsset.externalIds.length);
+      expect(restoredAsset.externalIds[0]).to.equal(originalAsset.externalIds[0]);
+      
+      // Status and operation should be updated
+      expect(restoredAsset.status).to.equal(0); // ACTIVE
+      expect(restoredAsset.operation).to.equal(6); // UNGROUP
+      expect(restoredAsset.lastUpdated).to.be.greaterThan(originalAsset.lastUpdated);
+      expect(restoredAsset.groupedBy).to.equal(hre.ethers.ZeroHash);
+    });
+
+    it("Should handle consecutive group and ungroup operations", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // First group
+      const GROUP_ASSET_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONSECUTIVE_1"));
+      const groupInput1 = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET_1,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput1);
+
+      // First ungroup
+      const ungroupInput1 = {
+        assetId: GROUP_ASSET_1,
+        channelName: CHANNEL_1,
+        dataHash: hre.ethers.ZeroHash,
+        idLocal: ""
+      };
+
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput1);
+
+      // Second group (regroup same assets)
+      const GROUP_ASSET_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONSECUTIVE_2"));
+      const groupInput2 = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET_2,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_4]
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput2))
+        .not.to.be.reverted;
+
+      // Second ungroup
+      const ungroupInput2 = {
+        assetId: GROUP_ASSET_2,
+        channelName: CHANNEL_1,
+        dataHash: DATA_HASH_1,
+        idLocal: LOCATION_B
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2))
+        .not.to.be.reverted;
+
+      // Verify final state
+      const asset1 = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const asset2 = await assetRegistry.getAsset(CHANNEL_1, ASSET_2);
+      
+      expect(asset1.status).to.equal(0); // ACTIVE
+      expect(asset2.status).to.equal(0); // ACTIVE
+      expect(asset1.groupedBy).to.equal(hre.ethers.ZeroHash);
+      expect(asset2.groupedBy).to.equal(hre.ethers.ZeroHash);
+
+      // Check history shows all operations
+      let [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
+      expect(operations.length).to.equal(5); // CREATE, GROUP, UNGROUP, GROUP, UNGROUP
+      expect(operations[0]).to.equal(0); // CREATE
+      expect(operations[1]).to.equal(5); // GROUP
+      expect(operations[2]).to.equal(6); // UNGROUP
+      expect(operations[3]).to.equal(5); // GROUP
+      expect(operations[4]).to.equal(6); // UNGROUP
+    });
+  });
+
 });
