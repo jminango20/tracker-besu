@@ -216,7 +216,7 @@ interface IAssetRegistry {
      * Emitted when assets are grouped
      */
     event AssetsGrouped(
-        bytes32[] indexed originalAssetIds,
+        bytes32[] originalAssetIds,
         bytes32 indexed groupAssetId,
         address indexed owner,
         uint256 totalAmount,

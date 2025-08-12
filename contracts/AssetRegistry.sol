@@ -512,13 +512,15 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         for (uint256 i = 0; i < group.assetIds.length; i++) {
             Asset storage originalAsset = _assetsByChannel[group.channelName][group.assetIds[i]];
             
+            _removeAssetFromOwner(group.channelName, group.assetIds[i], originalAsset.owner);
+            _updateAssetInStatusEnumeration(group.channelName, group.assetIds[i], AssetStatus.INACTIVE);
+            
             originalAsset.status = AssetStatus.INACTIVE;
             originalAsset.operation = AssetOperation.GROUP;
             originalAsset.groupedBy = group.groupAssetId;  
             originalAsset.lastUpdated = Utils.timestamp();
             
             // Atualizar mappings
-            _updateAssetInStatusEnumeration(group.channelName, group.assetIds[i], AssetStatus.INACTIVE);
             _addToHistory(group.channelName, group.assetIds[i], AssetOperation.GROUP, Utils.timestamp());
         }
 
