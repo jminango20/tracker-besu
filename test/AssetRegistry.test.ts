@@ -25,7 +25,7 @@ import {
 } from "./utils/index";
 import hre from "hardhat";
 
-describe.only("AssetRegistry test", function () {
+describe("AssetRegistry test", function () {
 
   let accounts: any;
   let deployer: HardhatEthersSigner;
@@ -4168,7 +4168,7 @@ describe.only("AssetRegistry test", function () {
     });
   });
 
-  describe.only("inactivateAsset", function () {
+  describe("inactivateAsset", function () {
     it("Should allow asset owner to inactivate asset with final location and data", async function () {
       const { assetRegistry } = await loadFixture(deployAssetRegistry);
 
