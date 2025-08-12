@@ -506,7 +506,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyChannelMember(group.channelName)
     {
         _validateGroupAssetsInput(group);
-        _validateAssetsAndAmountConservation(group);
+        uint256 totalAmounts = _validateAssetsAndAmountConservation(group);
 
         //1. Inativar assets a serem agrupados
         for (uint256 i = 0; i < group.assetIds.length; i++) {
@@ -529,7 +529,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
 
         groupAsset.assetId = group.groupAssetId;  // User-defined ID
         groupAsset.owner = _msgSender();           // Owner dos assets originais
-        groupAsset.amount = group.amount;         // Total amount (já validado conservation)
+        groupAsset.amount = totalAmounts;         // Total amount (já validado conservation)
         groupAsset.idLocal = group.idLocal;      // Nova localização do grupo
 
         for (uint256 i = 0; i < group.dataHashes.length; i++) {
@@ -564,7 +564,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             group.assetIds,
             group.groupAssetId,
             _msgSender(),
-            group.amount,
+            totalAmounts,
             Utils.timestamp()
         );
     }
@@ -908,7 +908,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     function _validateGroupAssetsInput(GroupAssetsInput calldata input) internal view {
         if (input.groupAssetId == bytes32(0)) revert InvalidAssetId(input.channelName, input.groupAssetId);
         if (bytes(input.idLocal).length == 0) revert EmptyLocation();
-        if (input.amount == 0) revert InvalidAmount(input.amount);
         
         // Validações de arrays
         if (input.assetIds.length < MIN_GROUP_SIZE) {
@@ -940,7 +939,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
     }
 
-    function _validateAssetsAndAmountConservation(GroupAssetsInput calldata input) internal view {
+    function _validateAssetsAndAmountConservation(GroupAssetsInput calldata input) internal view returns (uint256) {
         uint256 totalOriginalAmounts = 0;
         address expectedOwner = _msgSender();
         
@@ -964,10 +963,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             
             totalOriginalAmounts += asset.amount;
         }
-        
-        if (totalOriginalAmounts != input.amount) {
-            revert AmountConservationViolated(totalOriginalAmounts, input.amount);
-        }
+
+        return totalOriginalAmounts;
     }
 
     function _validateUngroupAssetsInput(UngroupAssetsInput calldata input) internal pure {

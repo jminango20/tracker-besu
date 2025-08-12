@@ -125,7 +125,6 @@ interface IAssetRegistry {
         bytes32[] assetIds;           // Assets to group
         bytes32 groupAssetId;         // Group identifier
         bytes32 channelName;          // Channel for permissions
-        uint256 amount;               // Amount for group asset
         string idLocal;               // Location for group asset
         bytes32[] dataHashes;         // Data for group asset
     }

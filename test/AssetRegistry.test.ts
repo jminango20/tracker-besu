@@ -2560,7 +2560,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: createInput1.amount + createInput2.amount,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3, DATA_HASH_4]
       };
@@ -2645,7 +2644,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: SPLIT_AMOUNT_1 + SPLIT_AMOUNT_2,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -2703,7 +2701,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: createInput1.amount + createInput2.amount,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_4]
       };
@@ -2752,7 +2749,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -2774,83 +2770,6 @@ describe.only("AssetRegistry test", function () {
       let [groupOperations, groupTimestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, GROUP_ASSET);
       expect(groupOperations.length).to.equal(1);
       expect(groupOperations[0]).to.equal(5); // GROUP
-    });
-
-    it("Should validate amount conservation correctly", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
-
-      // Create assets with different amounts
-      const createInput1 = {
-        assetId: ASSET_1,
-        channelName: CHANNEL_1,
-        amount: 300,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
-      };
-
-      const createInput2 = {
-        assetId: ASSET_2,
-        channelName: CHANNEL_1,
-        amount: 700,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
-      };
-
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
-
-      // Test with correct amount conservation
-      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONSERVATION_GROUP"));
-      const correctGroupInput = {
-        assetIds: [ASSET_1, ASSET_2],
-        groupAssetId: GROUP_ASSET,
-        channelName: CHANNEL_1,
-        amount: 1000, // 300 + 700
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
-      };
-
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(correctGroupInput))
-        .not.to.be.reverted;
-
-      // Create more assets for incorrect conservation test
-      const createInput3 = {
-        assetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_3")),
-        channelName: CHANNEL_1,
-        amount: 400,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
-      };
-
-      const createInput4 = {
-        assetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_4")),
-        channelName: CHANNEL_1,
-        amount: 600,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
-      };
-
-      await assetRegistry.connect(accounts.member1).createAsset(createInput3);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput4);
-
-      // Test with incorrect amount conservation
-      const GROUP_ASSET_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("INCORRECT_GROUP"));
-      const incorrectGroupInput = {
-        assetIds: [createInput3.assetId, createInput4.assetId],
-        groupAssetId: GROUP_ASSET_2,
-        channelName: CHANNEL_1,
-        amount: 500, // Should be 1000 (400 + 600)
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_4]
-      };
-
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(incorrectGroupInput))
-        .to.be.revertedWithCustomError(assetRegistry, "AmountConservationViolated")
-        .withArgs(1000, 500);
     });
 
     it("Should revert if group asset ID already exists", async function () {
@@ -2883,7 +2802,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: ASSET_1, // Already exists!
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT/2,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -2914,7 +2832,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2], // ASSET_2 doesn't exist
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -2965,7 +2882,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2], // ASSET_2 is inactive
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_4]
       };
@@ -3007,7 +2923,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -3048,7 +2963,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -3088,7 +3002,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: hre.ethers.ZeroHash,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -3102,7 +3015,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VALID_GROUP")),
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: "",
         dataHashes: [DATA_HASH_3]
       };
@@ -3110,26 +3022,11 @@ describe.only("AssetRegistry test", function () {
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
 
-      // Test zero amount
-      groupInput = {
-        assetIds: [ASSET_1, ASSET_2],
-        groupAssetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VALID_GROUP")),
-        channelName: CHANNEL_1,
-        amount: 0,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
-      };
-
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
-        .to.be.revertedWithCustomError(assetRegistry, "InvalidAmount")
-        .withArgs(0);
-
       // Test empty dataHashes
       groupInput = {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VALID_GROUP")),
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: []
       };
@@ -3142,7 +3039,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1], // Only one asset
         groupAssetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VALID_GROUP")),
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT/2,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -3173,7 +3069,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_1], // Duplicate!
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -3213,7 +3108,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2, GROUP_ASSET], // Self-reference!
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -3252,7 +3146,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: assetIds,
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_2, DATA_HASH_3]
       };
@@ -3306,7 +3199,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
@@ -3359,7 +3251,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2, createInput3.assetId],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: 1000, // 150 + 350 + 500
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_4]
       };
@@ -3406,7 +3297,6 @@ describe.only("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT,
         idLocal: LOCATION_B,
         dataHashes: [DATA_HASH_3]
       };
