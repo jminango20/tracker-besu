@@ -279,6 +279,7 @@ interface IAssetRegistry {
     error AssetAlreadyInactive(bytes32 channelName, bytes32 assetId);
     error CannotReactivateAsset(bytes32 channelName, bytes32 assetId);
     error TransformationChainTooDeep(uint256 current, uint256 maximum);
+    error InsufficientSplitParts(uint256 provided, uint8 minimum);
 
     // =============================================================
     //                    ASSET REGISTRY

@@ -424,6 +424,9 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
 
         //2. Inativar original asset
+        _removeAssetFromOwner(split.channelName, split.assetId, originalAsset.owner);
+        _updateAssetInStatusEnumeration(split.channelName, split.assetId, AssetStatus.INACTIVE);
+
         originalAsset.status = AssetStatus.INACTIVE;
         originalAsset.operation = AssetOperation.SPLIT;
         originalAsset.lastUpdated = Utils.timestamp();
@@ -479,7 +482,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
 
         //4. Atualizar Rastreabilidade
-        _updateAssetInStatusEnumeration(split.channelName, split.assetId, AssetStatus.INACTIVE);
         _addToHistory(split.channelName, split.assetId, AssetOperation.SPLIT, Utils.timestamp());
         
         //5. Adicionar child assets no original
@@ -881,6 +883,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         
         // Validações de arrays
         if (input.amounts.length == 0) revert EmptyAmountsArray();
+        if (input.amounts.length < 2) revert InsufficientSplitParts(input.amounts.length, 2);
+
         if (input.amounts.length != input.dataHashes.length) revert ArrayLengthMismatch();
         
         // Gas protection
@@ -1186,50 +1190,5 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     function getVersion() external pure override returns (string memory) {
         return "1.0.0";
-    }
-
-    // ✅ FUNÇÕES DEBUG TEMPORÁRIAS
-    function debugTransformationDepth(bytes32 channelName, bytes32 assetId) 
-        external 
-        view 
-        returns (uint256) 
-    {
-        return _getTransformationDepth(channelName, assetId);
-    }
-
-    function debugGetParent(bytes32 channelName, bytes32 assetId) 
-        external 
-        view 
-        returns (bytes32) 
-    {
-        return _parentAssetByChannel[channelName][assetId];
-    }
-
-    function debugBuildChainDetails(bytes32 channelName, bytes32 assetId) 
-        external 
-        view 
-        returns (
-            bytes32[] memory fullChain,
-            uint256 actualCount,
-            bytes32 currentId,
-            uint256 maxDepth
-        ) 
-    {
-        bytes32[] memory tempChain = new bytes32[](MAX_TRANSFORMATION_DEPTH);
-        uint256 count = 0;
-        currentId = assetId;
-        maxDepth = MAX_TRANSFORMATION_DEPTH;
-        
-        while (currentId != bytes32(0) && count < MAX_TRANSFORMATION_DEPTH) {
-            tempChain[count] = currentId;
-            currentId = _parentAssetByChannel[channelName][currentId];
-            count++;
-        }
-        
-        actualCount = count;
-        fullChain = new bytes32[](count);
-        for (uint256 i = 0; i < count; i++) {
-            fullChain[i] = tempChain[count - 1 - i];
-        }
     }
 }

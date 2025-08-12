@@ -3,9 +3,9 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
 import { deployAssetRegistry } from "./fixture/deployAssetRegistry";
-import { getTestAccounts, LOCATION_B } from "./utils/index";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
+  getTestAccounts,
   ASSET_ADMIN_ROLE,
   CHANNEL_1,
   ASSET_1,
@@ -15,7 +15,10 @@ import {
   DATA_HASH_3,
   DATA_HASH_4,
   DEFAULT_AMOUNT,
+  SPLIT_AMOUNT_1,
+  SPLIT_AMOUNT_2,
   LOCATION_A,
+  LOCATION_B,
   EXTERNAL_ID_1,
   EXTERNAL_ID_2,
   EXTERNAL_ID_3
@@ -29,6 +32,7 @@ describe.only("AssetRegistry test", function () {
   let user: HardhatEthersSigner;
   let member1: HardhatEthersSigner;
   let member2: HardhatEthersSigner;
+  let nonMember: HardhatEthersSigner;
 
   beforeEach(async function () {
     // Load accounts
@@ -37,6 +41,7 @@ describe.only("AssetRegistry test", function () {
     user = accounts.user;
     member1 = accounts.member1;
     member2 = accounts.member2;
+    nonMember = accounts.nonMember;
   });
 
   describe("Deployment", function () {
@@ -1975,6 +1980,551 @@ describe.only("AssetRegistry test", function () {
       
       expect(newAsset1.transformationId).to.equal("IDENTICAL-PROCESSING");
       expect(newAsset2.transformationId).to.equal("IDENTICAL-PROCESSING");
+    });
+  });
+
+  describe("splitAsset", function () {
+    it("Should allow asset owner to split asset into multiple parts", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        // Create original asset
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: 1000, //Vamos splitar em: 400 + 300 + 300
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: [EXTERNAL_ID_1]
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        // Split asset
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [400, 300, 300], // Must sum to 1000
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .not.to.be.reverted;
+
+        // Check original asset is now inactive
+        const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+        expect(originalAsset.status).to.equal(1); // INACTIVE
+        expect(originalAsset.operation).to.equal(4); // SPLIT (AssetOperation.SPLIT = 4)
+        expect(originalAsset.childAssets.length).to.equal(3);
+
+        // Check new assets were created correctly
+        for (let i = 0; i < 3; i++) {
+            const newAssetId = originalAsset.childAssets[i];
+            const newAsset = await assetRegistry.getAsset(CHANNEL_1, newAssetId);
+            
+            expect(newAsset.owner).to.equal(accounts.member1.address);
+            expect(newAsset.amount).to.equal(splitInput.amounts[i]);
+            expect(newAsset.idLocal).to.equal(LOCATION_B);
+            expect(newAsset.status).to.equal(0); // ACTIVE
+            expect(newAsset.operation).to.equal(4); // SPLIT
+            expect(newAsset.parentAssetId).to.equal(ASSET_1);
+            expect(newAsset.transformationId).to.equal(`SPLIT_${i + 1}`);
+            expect(newAsset.dataHashes.length).to.equal(1);
+            expect(newAsset.dataHashes[0]).to.equal(splitInput.dataHashes[i]);
+            expect(newAsset.originOwner).to.equal(accounts.member1.address);
+            
+            // Should not inherit grouping or external IDs
+            expect(newAsset.groupedAssets.length).to.equal(0);
+            expect(newAsset.externalIds.length).to.equal(0);
+            expect(newAsset.childAssets.length).to.equal(0);
+        }
+    });
+
+    it("Should emit AssetSplit event", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        // Create and split asset
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: 500,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [200, 300],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .to.emit(assetRegistry, "AssetSplit")
+            .withArgs(ASSET_1, anyValue, accounts.member1.address, [200, 300], anyValue);
+    });
+
+    it("Should revert if amounts don't sum to original amount", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2, SPLIT_AMOUNT_1], // Sum = 900, original = 1000
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .to.be.revertedWithCustomError(assetRegistry, "AmountConservationViolated")
+            .withArgs(DEFAULT_AMOUNT, SPLIT_AMOUNT_1 + SPLIT_AMOUNT_2 + SPLIT_AMOUNT_1);
+    });
+
+    it("Should revert if amounts and dataHashes arrays have different lengths", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2], // 2 amounts
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4] // 3 dataHashes
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .to.be.revertedWithCustomError(assetRegistry, "ArrayLengthMismatch");
+    });
+
+    it("Should revert if any amount is zero", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, 0, SPLIT_AMOUNT_2], // One amount is zero
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .to.be.revertedWithCustomError(assetRegistry, "InvalidSplitAmount")
+            .withArgs(0);
+    });
+
+    it("Should update owner and status enumerations correctly", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        // Check initial state
+        let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
+        expect(activeAssets.length).to.equal(1);
+
+        let [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+        expect(ownerAssets.length).to.equal(1);
+
+        // Split asset
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+
+        // Check final state
+        [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
+        expect(activeAssets.length).to.equal(2); // 2 new active assets
+
+        let [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
+        expect(inactiveAssets.length).to.equal(1); // 1 inactive (original)
+
+        [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+        expect(ownerAssets.length).to.equal(2); // Owner now has 2 assets (new splits)
+    });
+
+    it("Should revert if caller is not asset owner", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        await expect(assetRegistry.connect(accounts.member2).splitAsset(splitInput))
+            .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
+            .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
+    });
+
+    it("Should add split operations to asset history", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+
+        // Check original asset history
+        let [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
+        expect(operations.length).to.equal(2);
+        expect(operations[0]).to.equal(0); // CREATE
+        expect(operations[1]).to.equal(4); // SPLIT
+
+        // Check new assets history
+        const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+        for (let i = 0; i < 2; i++) {
+            const newAssetId = originalAsset.childAssets[i];
+            [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, newAssetId);
+            expect(operations.length).to.equal(1);
+            expect(operations[0]).to.equal(4); // SPLIT
+        }
+    });
+
+    it("Should handle minimum split (2 parts)", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: 2, // Valor mínimo
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [1, 1],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .not.to.be.reverted;
+    });
+
+    it("Should handle maximum number of splits", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: 100,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        // Supondo limite máximo de 10 divisões
+        const amounts = new Array(10).fill(10);
+        const dataHashes = new Array(10).fill(0).map((_, i) => `0x${(i + 1).toString().padStart(64, '0')}`);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: amounts,
+            idLocal: LOCATION_B,
+            dataHashes: dataHashes
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .not.to.be.reverted;
+    });
+
+    it("Should handle large amounts correctly", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const largeAmount = hre.ethers.parseUnits("1000000", 18); // 1M tokens
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: largeAmount,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [
+                hre.ethers.parseUnits("600000", 18),
+                hre.ethers.parseUnits("400000", 18)
+            ],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .not.to.be.reverted;
+    });
+
+    it("Should revert with empty amounts array", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [], 
+            idLocal: LOCATION_B,
+            dataHashes: []
+        };
+
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+            .to.be.revertedWithCustomError(assetRegistry, "EmptyAmountsArray");
+    });
+
+    it("Should revert with single amount (meaningless split)", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [DEFAULT_AMOUNT], // Apenas uma parte
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2]
+        };
+            
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+          .to.be.revertedWithCustomError(assetRegistry, "InsufficientSplitParts");
+    });
+
+    it("Should handle gas efficiently for multiple splits", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5], // 5 divisões
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4, DATA_HASH_2, DATA_HASH_3]
+        };
+
+        const tx = await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+        const receipt = await tx.wait();
+        
+        expect(receipt?.gasUsed).to.be.lessThan(3000000); 
+    });
+
+    it("Should generate unique asset IDs for split assets", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1/2, SPLIT_AMOUNT_1/2, SPLIT_AMOUNT_2],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
+        };
+
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+
+        const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+        const childIds = originalAsset.childAssets;
+        
+        // Verificar que todos os IDs são únicos
+        const uniqueIds = new Set(childIds);
+        expect(uniqueIds.size).to.equal(childIds.length);
+        
+        // Verificar que nenhum ID filho é igual ao ID pai
+        expect(childIds).to.not.include(ASSET_1);
+    });
+
+    it("Should revert if caller is not channel member", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        // Criar asset como member1
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: []
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        // Tentar dividir com uma conta que não é membro do canal
+        await expect(assetRegistry.connect(accounts.nonMember).splitAsset(splitInput))
+            .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
+            .withArgs(CHANNEL_1, accounts.nonMember.address);
+    });
+
+    it("Should preserve asset metadata correctly in split assets", async function () {
+        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        
+        const createInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amount: DEFAULT_AMOUNT,
+            idLocal: LOCATION_A,
+            dataHashes: [DATA_HASH_1],
+            externalIds: [EXTERNAL_ID_1]
+        };
+
+        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+        const splitInput = {
+            assetId: ASSET_1,
+            channelName: CHANNEL_1,
+            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
+            idLocal: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        };
+
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+
+        const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+        
+        // Verificar que cada asset filho tem os metadados corretos
+        for (let i = 0; i < originalAsset.childAssets.length; i++) {
+            const childAsset = await assetRegistry.getAsset(CHANNEL_1, originalAsset.childAssets[i]);
+            
+            expect(childAsset.idLocal).to.equal(LOCATION_B);
+            expect(childAsset.originOwner).to.equal(accounts.member1.address);
+            expect(childAsset.parentAssetId).to.equal(ASSET_1);
+            expect(childAsset.createdAt).to.be.greaterThan(0);
+            expect(childAsset.lastUpdated).to.equal(childAsset.createdAt);
+        }
     });
   });
 });

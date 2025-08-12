@@ -9,6 +9,7 @@ export interface TestAccounts {
   member1: HardhatEthersSigner;
   member2: HardhatEthersSigner;
   member3: HardhatEthersSigner;
+  nonMember: HardhatEthersSigner;
   // Add more roles as needed
 }
 
@@ -24,5 +25,6 @@ export async function getTestAccounts(): Promise<TestAccounts> {
     member1: signers[4],     // Member 1 of channel
     member2: signers[5],     // Member 2 of channel
     member3: signers[6],     // Member 3 of channel
+    nonMember: signers[7]
   };
 }
