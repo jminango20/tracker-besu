@@ -4168,4 +4168,639 @@ describe.only("AssetRegistry test", function () {
     });
   });
 
+  describe.only("inactivateAsset", function () {
+    it("Should allow asset owner to inactivate asset with final location and data", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Verify asset is initially active
+      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.true;
+      
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(originalAsset.status).to.equal(0); // ACTIVE
+
+      // Inactivate asset with final data
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_3
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+        .not.to.be.reverted;
+
+      // Verify asset is now inactive
+      const inactivatedAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(inactivatedAsset.status).to.equal(1); // INACTIVE
+      expect(inactivatedAsset.operation).to.equal(8); // INACTIVATE
+      expect(inactivatedAsset.lastUpdated).to.be.greaterThan(originalAsset.lastUpdated);
+      
+      // Verify final location was updated
+      expect(inactivatedAsset.idLocal).to.equal(LOCATION_B);
+      
+      // Verify final dataHash was updated (should replace existing hashes)
+      expect(inactivatedAsset.dataHashes.length).to.equal(1);
+      expect(inactivatedAsset.dataHashes[0]).to.equal(DATA_HASH_3);
+      
+      // Verify other properties remain unchanged
+      expect(inactivatedAsset.owner).to.equal(originalAsset.owner);
+      expect(inactivatedAsset.originOwner).to.equal(originalAsset.originOwner);
+      expect(inactivatedAsset.amount).to.equal(originalAsset.amount);
+      expect(inactivatedAsset.createdAt).to.equal(originalAsset.createdAt);
+      expect(inactivatedAsset.externalIds.length).to.equal(1);
+      expect(inactivatedAsset.externalIds[0]).to.equal(EXTERNAL_ID_1);
+
+      // Verify asset is no longer active
+      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.false;
+    });
+
+    it("Should emit AssetInactivated event", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Inactivate asset
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+        .to.emit(assetRegistry, "AssetInactivated")
+        .withArgs(ASSET_1, accounts.member1.address, 8, anyValue); // 3 = INACTIVATE operation
+    });
+
+    it("Should allow inactivation with only final location (no dataHash)", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1, DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Inactivate with only location update
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: hre.ethers.ZeroHash // No update
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.status).to.equal(1); // INACTIVE
+      expect(asset.idLocal).to.equal(LOCATION_B); // Updated
+      expect(asset.dataHashes.length).to.equal(2); // Preserved original hashes
+      expect(asset.dataHashes[0]).to.equal(DATA_HASH_1);
+      expect(asset.dataHashes[1]).to.equal(DATA_HASH_2);
+    });
+
+    it("Should allow inactivation with only final dataHash (no location)", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Inactivate with only dataHash update
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: "", // No update
+        finalDataHash: DATA_HASH_2
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.status).to.equal(1); // INACTIVE
+      expect(asset.idLocal).to.equal(LOCATION_A); // Preserved
+      expect(asset.dataHashes.length).to.equal(1); // Replaced
+      expect(asset.dataHashes[0]).to.equal(DATA_HASH_2);
+    });
+
+    it("Should allow inactivation without any final updates", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: [EXTERNAL_ID_1]
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+
+      // Inactivate without any updates
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: "", // No update
+        finalDataHash: hre.ethers.ZeroHash // No update
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.status).to.equal(1); // INACTIVE
+      expect(asset.operation).to.equal(8); // INACTIVATE
+      
+      // All original data should be preserved
+      expect(asset.idLocal).to.equal(originalAsset.idLocal);
+      expect(asset.dataHashes.length).to.equal(originalAsset.dataHashes.length);
+      expect(asset.dataHashes[0]).to.equal(originalAsset.dataHashes[0]);
+      expect(asset.externalIds.length).to.equal(originalAsset.externalIds.length);
+      expect(asset.externalIds[0]).to.equal(originalAsset.externalIds[0]);
+    });
+
+    it("Should update owner and status enumerations correctly", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create multiple assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // Check initial state
+      let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
+      expect(activeAssets.length).to.equal(2);
+
+      let [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
+      expect(inactiveAssets.length).to.equal(0);
+
+      let [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(ownerAssets.length).to.equal(2);
+
+      // Inactivate one asset
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_3
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      // Check final state
+      [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
+      expect(activeAssets.length).to.equal(1); // Only ASSET_2
+      expect(activeAssets[0]).to.equal(ASSET_2);
+
+      [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
+      expect(inactiveAssets.length).to.equal(1); // Only ASSET_1
+      expect(inactiveAssets[0]).to.equal(ASSET_1);
+
+      [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
+      expect(ownerAssets.length).to.equal(1); // Only ASSET_2 (ASSET_1 removed from owner enumeration)
+      expect(ownerAssets[0]).to.equal(ASSET_2);
+    });
+
+    it("Should add inactivate operation to asset history", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Inactivate asset
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      const [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
+      
+      expect(operations.length).to.equal(2);
+      expect(operations[0]).to.equal(0); // CREATE
+      expect(operations[1]).to.equal(8); // INACTIVATE
+      expect(timestamps.length).to.equal(2);
+      expect(timestamps[1]).to.be.greaterThan(timestamps[0]);
+    });
+
+    it("Should revert if asset does not exist", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_A,
+        finalDataHash: DATA_HASH_1
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
+        .withArgs(CHANNEL_1, ASSET_1);
+    });
+
+    it("Should revert if asset is already inactive", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // First inactivation (should succeed)
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      // Second inactivation (should fail)
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+        .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
+        .withArgs(CHANNEL_1, ASSET_1);
+    });
+
+    it("Should revert if caller is not asset owner", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with member1
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to inactivate with member2 (not owner)
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await expect(assetRegistry.connect(accounts.member2).inactivateAsset(inactivateInput))
+        .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
+        .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
+    });
+
+    it("Should revert if caller is not channel member", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Try to inactivate with non-channel member
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await expect(assetRegistry.connect(accounts.user).inactivateAsset(inactivateInput))
+        .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
+        .withArgs(CHANNEL_1, accounts.user.address);
+    });
+
+    it("Should revert with invalid input validations", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset first
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Test invalid assetId
+      const inactivateInput = {
+        assetId: hre.ethers.ZeroHash,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
+        .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
+
+      // Test invalid channelName
+      const inactivateInput2 = {
+        assetId: ASSET_1,
+        channelName: hre.ethers.ZeroHash,
+        finalLocation: LOCATION_B,
+        finalDataHash: DATA_HASH_2
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput2))
+        .to.be.revertedWithCustomError(assetRegistry, "InvalidChannelName")
+        .withArgs(hre.ethers.ZeroHash);
+    });
+
+    it("Should handle inactivation of previously transformed asset", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create original asset
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Transform asset
+      const transformInput = {
+        assetId: ASSET_1,
+        transformationId: "PROCESSING-BEFORE-INACTIVATE",
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT + 100,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2]
+      };
+
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+
+      // Get the new transformed asset ID
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const transformedAssetId = originalAsset.childAssets[0];
+
+      // Inactivate the transformed asset
+      const inactivateInput = {
+        assetId: transformedAssetId,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_A,
+        finalDataHash: DATA_HASH_3
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+        .not.to.be.reverted;
+
+      // Verify transformed asset is inactivated
+      const transformedAsset = await assetRegistry.getAsset(CHANNEL_1, transformedAssetId);
+      expect(transformedAsset.status).to.equal(1); // INACTIVE
+      expect(transformedAsset.operation).to.equal(8); // INACTIVATE
+      expect(transformedAsset.idLocal).to.equal(LOCATION_A);
+      expect(transformedAsset.dataHashes[0]).to.equal(DATA_HASH_3);
+
+      // Original asset should still be inactive from transformation
+      expect(originalAsset.status).to.equal(1); // INACTIVE
+      expect(originalAsset.operation).to.equal(7); // TRANSFORM
+    });
+
+    it("Should handle inactivation of previously split assets", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset to split
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: 1000,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Split asset
+      const splitInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amounts: [400, 600],
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_2, DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+
+      // Get split asset IDs
+      const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const splitAssetId1 = originalAsset.childAssets[0];
+      const splitAssetId2 = originalAsset.childAssets[1];
+
+      // Inactivate one of the split assets
+      const inactivateInput = {
+        assetId: splitAssetId1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_A,
+        finalDataHash: DATA_HASH_4
+      };
+
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+        .not.to.be.reverted;
+
+      // Verify first split asset is inactivated
+      const splitAsset1 = await assetRegistry.getAsset(CHANNEL_1, splitAssetId1);
+      expect(splitAsset1.status).to.equal(1); // INACTIVE
+      expect(splitAsset1.operation).to.equal(8); // INACTIVATE
+
+      // Verify second split asset is still active
+      const splitAsset2 = await assetRegistry.getAsset(CHANNEL_1, splitAssetId2);
+      expect(splitAsset2.status).to.equal(0); // ACTIVE
+      expect(splitAsset2.operation).to.equal(4); // SPLIT
+
+      // Verify enumerations are correct
+      const [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
+      expect(activeAssets.length).to.equal(1); // Only second split asset
+
+      const [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
+      expect(inactiveAssets.length).to.equal(2); // Original + first split asset
+    });
+
+    it("Should handle large data replacement efficiently", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create asset with multiple data hashes
+      const originalHashes = [DATA_HASH_1, DATA_HASH_2, DATA_HASH_3, DATA_HASH_4];
+      const createInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT,
+        idLocal: LOCATION_A,
+        dataHashes: originalHashes,
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+
+      // Inactivate with single final hash (should replace all)
+      const inactivateInput = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_B,
+        finalDataHash: `0x${'f'.repeat(64)}` // Single final hash
+      };
+
+      const tx = await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      const receipt = await tx.wait();
+      
+      expect(receipt?.gasUsed).to.be.lessThan(200000); // Reasonable gas usage
+
+      // Verify replacement worked correctly
+      const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      expect(asset.dataHashes.length).to.equal(1); // All replaced with single hash
+      expect(asset.dataHashes[0]).to.equal(`0x${'f'.repeat(64)}`);
+    });
+
+    it("Should preserve asset relationships after inactivation", async function () {
+      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+
+      // Create and group assets
+      const createInput1 = {
+        assetId: ASSET_1,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_1],
+        externalIds: []
+      };
+
+      const createInput2 = {
+        assetId: ASSET_2,
+        channelName: CHANNEL_1,
+        amount: DEFAULT_AMOUNT/2,
+        idLocal: LOCATION_A,
+        dataHashes: [DATA_HASH_2],
+        externalIds: []
+      };
+
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+
+      // Group assets
+      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("INACTIVATE_GROUP"));
+      const groupInput = {
+        assetIds: [ASSET_1, ASSET_2],
+        groupAssetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        idLocal: LOCATION_B,
+        dataHashes: [DATA_HASH_3]
+      };
+
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+
+      // Inactivate the group asset
+      const inactivateInput = {
+        assetId: GROUP_ASSET,
+        channelName: CHANNEL_1,
+        finalLocation: LOCATION_A,
+        finalDataHash: DATA_HASH_4
+      };
+
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+
+      // Verify group asset is inactivated but relationships are preserved
+      const groupAsset = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
+      expect(groupAsset.status).to.equal(1); // INACTIVE
+      expect(groupAsset.operation).to.equal(8); // INACTIVATE
+      expect(groupAsset.groupedAssets.length).to.equal(2); // Relationships preserved
+      expect(groupAsset.groupedAssets[0]).to.equal(ASSET_1);
+      expect(groupAsset.groupedAssets[1]).to.equal(ASSET_2);
+
+      // Verify grouped assets still reference the group
+      const asset1 = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const asset2 = await assetRegistry.getAsset(CHANNEL_1, ASSET_2);
+      expect(asset1.groupedBy).to.equal(GROUP_ASSET);
+      expect(asset2.groupedBy).to.equal(GROUP_ASSET);
+    });
+  });
 });

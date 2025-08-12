@@ -689,11 +689,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             asset.dataHashes[0] = inactivate.finalDataHash;
         }
         
+        _removeAssetFromOwner(inactivate.channelName, inactivate.assetId, asset.owner);
+        _updateAssetInStatusEnumeration(inactivate.channelName, inactivate.assetId, AssetStatus.INACTIVE);
+        
         asset.status = AssetStatus.INACTIVE;
         asset.operation = AssetOperation.INACTIVATE;
         asset.lastUpdated = Utils.timestamp();
         
-        _updateAssetInStatusEnumeration(inactivate.channelName, inactivate.assetId, AssetStatus.INACTIVE);
         _addToHistory(inactivate.channelName, inactivate.assetId, AssetOperation.INACTIVATE, Utils.timestamp());
         
         emit AssetInactivated(
