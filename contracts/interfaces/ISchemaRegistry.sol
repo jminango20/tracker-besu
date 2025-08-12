@@ -58,10 +58,10 @@ interface ISchemaRegistry {
 
     event SchemaCreated(
         bytes32 indexed id,
-        string indexed name,
+        string name,
         uint256 version,
         address indexed owner,
-        bytes32 channelName,
+        bytes32 indexed channelName,
         uint256 timestamp
     );
 

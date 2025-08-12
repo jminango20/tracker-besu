@@ -44,6 +44,12 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
      */
     mapping(bytes32 => mapping(bytes32 => uint256)) private _activeVersions;
 
+    /**
+     * Mapping for efficient list of existing versions
+     * @dev channelName => schemaId => version[]
+     */
+    mapping(bytes32 => mapping(bytes32 => uint256[])) private _schemaVersionLists;
+
     // =============================================================
     //                       CONSTRUCTOR
     // =============================================================
@@ -248,7 +254,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
             revert SchemaNotFoundInChannel(channelName, schemaId);
         }
         
-        return _buildVersionArrays(channelName, schemaId, latestVersion);
+        return _getSchemaVersions(channelName, schemaId);
     }
 
     /**
@@ -279,7 +285,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         Schema storage latestSchema = _schemasByChannelName[channelName][schemaId][latestVersion];
         owner = latestSchema.owner;
         
-        totalVersions = _countExistingVersions(channelName, schemaId, latestVersion);
+        totalVersions = _schemaVersionLists[channelName][schemaId].length;
     }
 
     // =============================================================
@@ -416,7 +422,9 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _schemasByChannelName[channelName][schemaId][version] = schema;
         _schemaExistsByChannelName[channelName][schemaId][version] = true;
         _latestVersions[channelName][schemaId] = version;
-        _activeVersions[channelName][schemaId] = version;        
+        _activeVersions[channelName][schemaId] = version;   
+
+        _schemaVersionLists[schema.channelName][schema.id].push(schema.version);     
     }
 
     function _storeUpdatedSchema(Schema memory newSchema) internal {
@@ -428,6 +436,8 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
         _schemaExistsByChannelName[channelName][schemaId][newVersion] = true;
         _latestVersions[channelName][schemaId] = newVersion;
         _activeVersions[channelName][schemaId] = newVersion;
+
+        _schemaVersionLists[channelName][schemaId].push(newVersion);
     }
 
     function _inactivateSchemaVersion(Schema storage schema) internal {
@@ -497,45 +507,19 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     //                    ARRAY BUILDERS
     // =============================================================
 
-    function _buildVersionArrays(bytes32 channelName, bytes32 schemaId, uint256 latestVersion) 
-        internal 
-        view 
-        returns (uint256[] memory versions, Schema[] memory schemas) 
+    function _getSchemaVersions(bytes32 channelName, bytes32 schemaId)
+        internal
+        view
+        returns (uint256[] memory versions, Schema[] memory schemas)
     {
-        uint256 existingCount = _countExistingVersions(channelName, schemaId, latestVersion);
+        versions = _schemaVersionLists[channelName][schemaId];
+        uint256 length = versions.length;
         
-        versions = new uint256[](existingCount);
-        schemas = new Schema[](existingCount);
-        
-        uint256 index = 0;
-        for (uint256 i = 1; i <= latestVersion;) {
-            if (_schemaExistsByChannelName[channelName][schemaId][i]) {
-                versions[index] = i;
-                schemas[index] = _schemasByChannelName[channelName][schemaId][i];
-                unchecked {
-                    ++index;
-                }
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _countExistingVersions(bytes32 channelName, bytes32 schemaId, uint256 latestVersion) 
-        internal 
-        view 
-        returns (uint256 count) 
-    {
-        for (uint256 i = 1; i <= latestVersion;) {
-            if (_schemaExistsByChannelName[channelName][schemaId][i]) {
-                unchecked {
-                    ++count;
-                }
-            }
-            unchecked {
-                ++i;
-            }
+        schemas = new Schema[](length);
+        for (uint256 i = 0; i < length;) {
+            uint256 version = versions[i];
+            schemas[i] = _schemasByChannelName[channelName][schemaId][version];
+            unchecked { ++i; }
         }
     }
 
