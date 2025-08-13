@@ -26,6 +26,9 @@ bytes32 constant PROCESS_ADMIN_ROLE = keccak256("PROCESS_ADMIN_ROLE");
 
 /// @dev Role for asset admin operations
 bytes32 constant ASSET_ADMIN_ROLE = keccak256("ASSET_ADMIN_ROLE");
+
+/// @dev Role for transaction orchestrator operations
+bytes32 constant TRANSACTION_ADMIN_ROLE = keccak256("TRANSACTION_ADMIN_ROLE");
    
 // =============================================================
 //                        SYSTEM LIMITS
@@ -54,7 +57,7 @@ uint256 constant MAX_SPLIT_COUNT = 20;      // Max 20 splits por operação
 uint256 constant MIN_SPLIT_AMOUNT = 1;      // Min 1 unit por split
 
 /// @dev Gas protection e business logic for group assets
-uint256 constant MAX_GROUP_SIZE = 15;        // Max assets per group
+uint256 constant MAX_GROUP_SIZE = 20;        // Max assets per group
 uint256 constant MIN_GROUP_SIZE = 2;         // Min assets per group (business requirement)
 uint256 constant MAX_GROUP_DATA_HASHES = 5;  // Max data hashes per group (gas protection)
 uint256 constant MAX_DATA_HASHES = 10;
@@ -73,6 +76,12 @@ bytes32 constant SCHEMA_REGISTRY = keccak256("SCHEMA_REGISTRY");
 
 /// @dev Contract name of ProcessRegistry
 bytes32 constant PROCESS_REGISTRY = keccak256("PROCESS_REGISTRY");
+
+/// @dev Contract name of AssetRegistry
+bytes32 constant ASSET_REGISTRY = keccak256("ASSET_REGISTRY");
+
+/// @dev Contract name of TransactionOrchestrator
+bytes32 constant TRANSACTION_ORCHESTRATOR = keccak256("TRANSACTION_ORCHESTRATOR");
     
 // =============================================================
 //                        STATUS FLAGS

@@ -35,12 +35,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     // =============================================================
 
     /**
-     * Mapping to track asset counter by channel
-     * @dev channelName => assetCounter
-     */
-    mapping(bytes32 => uint256) internal _assetCounterByChannel; 
-
-    /**
      * Mapping to store assets by ID and channel
      * @dev channelName => assetId => Asset
      */
@@ -659,6 +653,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     function inactivateAsset(InactivateAssetInput calldata inactivate) 
         external 
+        nonReentrant
         validChannelName(inactivate.channelName)
         onlyChannelMember(inactivate.channelName)    
     {
@@ -1141,6 +1136,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     }
 
     function _hasDuplicateAssets(bytes32[] calldata assetIds) internal pure returns (bool) {
+        if (assetIds.length <= 1) return false;
+
+        if (assetIds.length > MAX_GROUP_SIZE) {
+            revert TooManyAssetsForDuplicateCheck(assetIds.length, MAX_GROUP_SIZE);
+        }
+
         for (uint256 i = 0; i < assetIds.length; i++) {
             for (uint256 j = i + 1; j < assetIds.length; j++) {
                 if (assetIds[i] == assetIds[j]) {

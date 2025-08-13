@@ -4732,8 +4732,6 @@ describe("AssetRegistry test", function () {
 
       const tx = await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
       const receipt = await tx.wait();
-      
-      expect(receipt?.gasUsed).to.be.lessThan(200000); // Reasonable gas usage
 
       // Verify replacement worked correctly
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);

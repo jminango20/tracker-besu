@@ -542,6 +542,7 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     function getAddressDiscovery() external view returns (address) {
         return address(_getAddressDiscovery());
     }
+    
     /**
      * @inheritdoc BaseTraceContract
      */
