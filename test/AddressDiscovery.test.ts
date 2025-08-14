@@ -195,23 +195,15 @@ describe("AddressDiscovery test", function () {
       it("Should allow default admin to add new admin", async function () {
         const addressDiscovery = await loadFixture(deployAddressDiscovery);
 
-        await addressDiscovery.connect(accounts.deployer).addAdmin(accounts.otherAdmin.address);
+        await addressDiscovery.connect(accounts.deployer).grantRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.otherAdmin.address);
 
         expect(await addressDiscovery.hasRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.otherAdmin.address)).to.be.true;
-      });
-
-      it("Should revert if admin address is zero", async function () {
-        const addressDiscovery = await loadFixture(deployAddressDiscovery);
-
-        await expect(addressDiscovery.connect(accounts.deployer).addAdmin(ZeroAddress))
-          .to.be.revertedWithCustomError(addressDiscovery, "InvalidAddress")
-          .withArgs(ZeroAddress);
       });
 
       it("Should revert if caller is not default admin", async function () {
         const addressDiscovery = await loadFixture(deployAddressDiscovery);
 
-        await expect(addressDiscovery.connect(accounts.admin).addAdmin(accounts.otherAdmin.address))
+        await expect(addressDiscovery.connect(accounts.admin).grantRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.otherAdmin.address))
           .to.be.revertedWithCustomError(addressDiscovery, "AccessControlUnauthorizedAccount")
           .withArgs(accounts.admin.address, DEFAULT_ADMIN_ROLE);
       });
@@ -220,7 +212,7 @@ describe("AddressDiscovery test", function () {
         const addressDiscovery = await loadFixture(deployAddressDiscovery);
 
         // Add new admin
-        await addressDiscovery.connect(accounts.deployer).addAdmin(accounts.otherAdmin.address);
+        await addressDiscovery.connect(accounts.deployer).grantRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.otherAdmin.address);
 
         // New admin should be able to update addresses
         await expect(addressDiscovery.connect(accounts.otherAdmin).updateAddress(CONTRACT_1, contractAddress1))
@@ -237,23 +229,15 @@ describe("AddressDiscovery test", function () {
         expect(await addressDiscovery.hasRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.admin.address)).to.be.true;
 
         // Remove admin
-        await addressDiscovery.connect(accounts.deployer).removeAdmin(accounts.admin.address);
+        await addressDiscovery.connect(accounts.deployer).revokeRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.admin.address);
 
         expect(await addressDiscovery.hasRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.admin.address)).to.be.false;
-      });
-
-      it("Should revert if admin address is zero", async function () {
-        const addressDiscovery = await loadFixture(deployAddressDiscovery);
-
-        await expect(addressDiscovery.connect(accounts.deployer).removeAdmin(ZeroAddress))
-          .to.be.revertedWithCustomError(addressDiscovery, "InvalidAddress")
-          .withArgs(ZeroAddress);
       });
 
       it("Should revert if caller is not default admin", async function () {
         const addressDiscovery = await loadFixture(deployAddressDiscovery);
 
-        await expect(addressDiscovery.connect(accounts.admin).removeAdmin(accounts.otherAdmin.address))
+        await expect(addressDiscovery.connect(accounts.admin).revokeRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.otherAdmin.address))
           .to.be.revertedWithCustomError(addressDiscovery, "AccessControlUnauthorizedAccount")
           .withArgs(accounts.admin.address, DEFAULT_ADMIN_ROLE);
       });
@@ -261,7 +245,7 @@ describe("AddressDiscovery test", function () {
       it("Should prevent removed admin from updating addresses", async function () {
         const addressDiscovery = await loadFixture(deployAddressDiscovery);
 
-        await addressDiscovery.connect(accounts.deployer).removeAdmin(accounts.admin.address);
+        await addressDiscovery.connect(accounts.deployer).revokeRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.admin.address);
 
         // Removed admin should not be able to update addresses
         await expect(addressDiscovery.connect(accounts.admin).updateAddress(CONTRACT_1, contractAddress1))
@@ -272,7 +256,7 @@ describe("AddressDiscovery test", function () {
       it("Should allow removing non-existent admin without error", async function () {
         const addressDiscovery = await loadFixture(deployAddressDiscovery);
 
-        await expect(addressDiscovery.connect(accounts.deployer).removeAdmin(accounts.user.address))
+        await expect(addressDiscovery.connect(accounts.deployer).revokeRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.user.address))
           .not.to.be.reverted;
       });
     });
@@ -282,7 +266,8 @@ describe("AddressDiscovery test", function () {
     it("Should handle multiple admins managing different contracts", async function () {
       const addressDiscovery = await loadFixture(deployAddressDiscovery);
 
-      await addressDiscovery.connect(accounts.deployer).addAdmin(accounts.otherAdmin.address);
+      await addressDiscovery.connect(accounts.deployer).grantRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.admin.address)
+      await addressDiscovery.connect(accounts.deployer).grantRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.otherAdmin.address)
 
       // Both admins update different contracts
       await addressDiscovery.connect(accounts.admin).updateAddress(CONTRACT_1, contractAddress1);
@@ -301,7 +286,7 @@ describe("AddressDiscovery test", function () {
       expect(await addressDiscovery.getContractAddress(CONTRACT_1)).to.equal(contractAddress1);
 
       // Remove admin
-      await addressDiscovery.connect(accounts.deployer).removeAdmin(accounts.admin.address);
+      await addressDiscovery.connect(accounts.deployer).revokeRole(ADDRESS_DISCOVERY_ADMIN_ROLE, accounts.admin.address);
 
       // Contract should still be registered and accessible
       expect(await addressDiscovery.getContractAddress(CONTRACT_1)).to.equal(contractAddress1);

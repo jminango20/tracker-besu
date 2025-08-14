@@ -195,7 +195,7 @@ describe("AccessChannelManager test", function () {
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
 
         await expect(accessChannelManager.connect(deployer).addChannelMember(CHANNEL_1, ZeroAddress))
-          .to.be.revertedWithCustomError(accessChannelManager, "InvalidMemberAddress")
+          .to.be.revertedWithCustomError(accessChannelManager, "InvalidAddress")
           .withArgs(ZeroAddress);
       });
 
@@ -588,23 +588,15 @@ describe("AccessChannelManager test", function () {
         it("Should allow default admin to add new channel admin", async function () {
         const accessChannelManager = await loadFixture(deployAccessChannelManager);
 
-        await accessChannelManager.connect(deployer).addChannelAdmin(user.address);
+        await accessChannelManager.connect(deployer).grantRole(CHANNEL_ADMIN_ROLE, user.address);
 
         expect(await accessChannelManager.hasRole(CHANNEL_ADMIN_ROLE, user.address)).to.be.true;
-        });
-
-        it("Should revert if admin address is zero", async function () {
-        const accessChannelManager =     await loadFixture(deployAccessChannelManager);
-
-        await expect(accessChannelManager.connect(deployer).addChannelAdmin(ZeroAddress))
-            .to.be.revertedWithCustomError(accessChannelManager, "InvalidAddress")
-            .withArgs(ZeroAddress);
         });
 
         it("Should revert if caller is not default admin", async function () {
         const accessChannelManager = await loadFixture(deployAccessChannelManager);
 
-        await expect(accessChannelManager.connect(user).addChannelAdmin(member1.address))
+        await expect(accessChannelManager.connect(user).grantRole(CHANNEL_ADMIN_ROLE, member1.address))
             .to.be.revertedWithCustomError(accessChannelManager, "AccessControlUnauthorizedAccount")
             .withArgs(user.address, DEFAULT_ADMIN_ROLE);
         });
@@ -614,19 +606,11 @@ describe("AccessChannelManager test", function () {
         it("Should allow default admin to remove channel admin", async function () {
         const accessChannelManager = await loadFixture(deployAccessChannelManager);
 
-        await accessChannelManager.connect(deployer).addChannelAdmin(user.address);
+        await accessChannelManager.connect(deployer).grantRole(CHANNEL_ADMIN_ROLE, user.address);;
         expect(await accessChannelManager.hasRole(CHANNEL_ADMIN_ROLE, user.address)).to.be.true;
 
-        await accessChannelManager.connect(deployer).removeChannelAdmin(user.address);
+        await accessChannelManager.connect(deployer).revokeRole(CHANNEL_ADMIN_ROLE, user.address);
         expect(await accessChannelManager.hasRole(CHANNEL_ADMIN_ROLE, user.address)).to.be.false;
-        });
-
-        it("Should revert if admin address is zero", async function () {
-        const accessChannelManager =     await loadFixture(deployAccessChannelManager);
-
-        await expect(accessChannelManager.connect(deployer).removeChannelAdmin(ZeroAddress))
-            .to.be.revertedWithCustomError(accessChannelManager, "InvalidAddress")
-            .withArgs(ZeroAddress);
         });
     });
 
@@ -634,17 +618,9 @@ describe("AccessChannelManager test", function () {
         it("Should allow default admin to add new channel authority", async function () {
         const accessChannelManager = await loadFixture(deployAccessChannelManager);
 
-        await accessChannelManager.connect(deployer).addChannelAuthority(user.address);
+        await accessChannelManager.connect(deployer).grantRole(CHANNEL_AUTHORITY_ROLE, user.address);
 
         expect(await accessChannelManager.hasRole(CHANNEL_AUTHORITY_ROLE, user.address)).to.be.true;
-        });
-
-        it("Should revert if authority address is zero", async function () {
-        const accessChannelManager =     await loadFixture(deployAccessChannelManager);
-
-        await expect(accessChannelManager.connect(deployer).addChannelAuthority(ZeroAddress))
-            .to.be.revertedWithCustomError(accessChannelManager, "InvalidAddress")
-            .withArgs(ZeroAddress);
         });
     });
 
@@ -652,19 +628,11 @@ describe("AccessChannelManager test", function () {
         it("Should allow default admin to remove channel authority", async function () {
         const accessChannelManager = await loadFixture(deployAccessChannelManager);
 
-        await accessChannelManager.connect(deployer).addChannelAuthority(user.address);
+        await accessChannelManager.connect(deployer).grantRole(CHANNEL_AUTHORITY_ROLE, user.address);
         expect(await accessChannelManager.hasRole(CHANNEL_AUTHORITY_ROLE, user.address)).to.be.true;
 
-        await accessChannelManager.connect(deployer).removeChannelAuthority(user.address);
+        await accessChannelManager.connect(deployer).revokeRole(CHANNEL_AUTHORITY_ROLE, user.address);
         expect(await accessChannelManager.hasRole(CHANNEL_AUTHORITY_ROLE, user.address)).to.be.false;
-        });
-
-        it("Should revert if authority address is zero", async function () {
-        const accessChannelManager =     await loadFixture(deployAccessChannelManager);
-
-        await expect(accessChannelManager.connect(deployer).removeChannelAuthority(ZeroAddress))
-            .to.be.revertedWithCustomError(accessChannelManager, "InvalidAddress")
-            .withArgs(ZeroAddress);
         });
     });
 
@@ -673,7 +641,7 @@ describe("AccessChannelManager test", function () {
         const accessChannelManager =   await loadFixture(deployAccessChannelManager);
 
         await accessChannelManager.connect(deployer).createChannel(CHANNEL_1);
-        await accessChannelManager.connect(deployer).addChannelAdmin(user.address);
+        await accessChannelManager.connect(deployer).grantRole(CHANNEL_ADMIN_ROLE, user.address);
 
         await expect(accessChannelManager.connect(user).addChannelMember(CHANNEL_1, member1.address))
             .not.to.be.reverted;
@@ -682,7 +650,7 @@ describe("AccessChannelManager test", function () {
         it("Should allow newly added authority to create channels", async function () {
         const accessChannelManager = await loadFixture(deployAccessChannelManager);
 
-        await accessChannelManager.connect(deployer).addChannelAuthority(user.address);
+        await accessChannelManager.connect(deployer).grantRole(CHANNEL_AUTHORITY_ROLE, user.address);
 
         await expect(accessChannelManager.connect(user).createChannel(CHANNEL_1))
             .not.to.be.reverted;

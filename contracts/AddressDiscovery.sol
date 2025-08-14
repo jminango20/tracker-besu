@@ -8,6 +8,7 @@ import {
     DEFAULT_ADMIN_ROLE,
     ADDRESS_DISCOVERY_ADMIN_ROLE
     } from "./lib/Constants.sol";
+import {AddressDiscoveryHelper} from "./lib/AddressDiscoveryHelper.sol";
 
 /**
  * @title AddressDiscovery
@@ -15,6 +16,8 @@ import {
  * @dev Contract that facilitates the discovery of addresses of smart contracts to be used in other contracts.
  */
 contract AddressDiscovery is Context, IAddressDiscovery, AccessControl {
+
+    using AddressDiscoveryHelper for *;
 
     // =============================================================
     //                        STORAGE
@@ -36,7 +39,8 @@ contract AddressDiscovery is Context, IAddressDiscovery, AccessControl {
      * @param _admin Address of the admin
      */
     constructor(address _admin) {
-        if (_admin == address(0)) revert InvalidAddress(_admin);
+
+        AddressDiscoveryHelper.validateAddress(_admin);
         
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(ADDRESS_DISCOVERY_ADMIN_ROLE, _msgSender());
@@ -54,7 +58,7 @@ contract AddressDiscovery is Context, IAddressDiscovery, AccessControl {
         external 
         onlyRole(ADDRESS_DISCOVERY_ADMIN_ROLE) 
     {
-        if (newAddress == address(0)) revert InvalidAddress(newAddress);
+        AddressDiscoveryHelper.validateAddress(newAddress);
         
         address oldAddress = _addressDiscovery[smartContract];
         
@@ -90,27 +94,5 @@ contract AddressDiscovery is Context, IAddressDiscovery, AccessControl {
         returns (bool) 
     {
         return _addressDiscovery[smartContract] != address(0);
-    }
-
-    // =============================================================
-    //                    ACCESS CONTROL HELPERS
-    // =============================================================
-
-    /**
-     * Function to add a new address discovery admin.
-     * @param newAddressDiscoveryAdmin Address of the new address discovery admin
-     */
-    function addAdmin(address newAddressDiscoveryAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newAddressDiscoveryAdmin == address(0)) revert InvalidAddress(newAddressDiscoveryAdmin);
-        _grantRole(ADDRESS_DISCOVERY_ADMIN_ROLE, newAddressDiscoveryAdmin);
-    }
-
-    /**
-     * Function to remove an address discovery admin.
-     * @param addressDiscoveryAdmin Address of the address discovery admin to remove
-     */
-    function removeAdmin(address addressDiscoveryAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (addressDiscoveryAdmin == address(0)) revert InvalidAddress(addressDiscoveryAdmin);
-        _revokeRole(ADDRESS_DISCOVERY_ADMIN_ROLE, addressDiscoveryAdmin);
     }
 }

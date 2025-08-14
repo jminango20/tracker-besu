@@ -33,6 +33,9 @@ bytes32 constant TRANSACTION_ADMIN_ROLE = keccak256("TRANSACTION_ADMIN_ROLE");
 // =============================================================
 //                        SYSTEM LIMITS
 // ============================================================= 
+
+/// @dev Maximum number of schemas per process
+uint256 constant MAX_SCHEMAS_PER_PROCESS = 10;
     
 /// @dev Maximum batch size for adding members in one transaction
 uint256 constant MAX_BATCH_SIZE = 100;

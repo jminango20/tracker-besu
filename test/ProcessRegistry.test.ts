@@ -1,7 +1,6 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
 import { deployProcessRegistry } from "./fixture/deployProcessRegistry";
 import { getTestAccounts } from "./utils/index";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -413,13 +412,13 @@ describe("ProcessRegistry test", function () {
 
       const invalidInput = { 
         ...processInputWithSchemas, 
-        action: 2, // CREATE_DOCUMENT
+        action: 8, // CREATE_DOCUMENT
         schemas: [] 
       };
 
       await expect(processRegistry.connect(member1).createProcess(invalidInput))
         .to.be.revertedWithCustomError(processRegistry, "SchemasRequiredForAction")
-        .withArgs(2);
+        .withArgs(8);
     });
 
     it("Should not require schemas for TRANSFER_ASSET action", async function () {
@@ -828,24 +827,16 @@ describe("ProcessRegistry test", function () {
       it("Should allow default admin to add process admin", async function () {
         const { processRegistry } = await loadFixture(deployProcessRegistry);
 
-        await processRegistry.connect(deployer).addProcessAdmin(user.address);
+        await processRegistry.connect(deployer).grantRole(PROCESS_ADMIN_ROLE, user.address);
 
         expect(await processRegistry.hasRole(PROCESS_ADMIN_ROLE, user.address)).to.be.true;
-      });
-
-      it("Should revert if admin address is zero", async function () {
-        const { processRegistry } = await loadFixture(deployProcessRegistry);
-
-        await expect(processRegistry.connect(deployer).addProcessAdmin(ZeroAddress))
-          .to.be.revertedWithCustomError(processRegistry, "InvalidAddress")
-          .withArgs(ZeroAddress);
       });
 
       it("Should revert if caller is not default admin", async function () {
         const { processRegistry } = await loadFixture(deployProcessRegistry);
         const DEFAULT_ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-        await expect(processRegistry.connect(user).addProcessAdmin(member1.address))
+        await expect(processRegistry.connect(user).grantRole(PROCESS_ADMIN_ROLE, member1.address))
           .to.be.revertedWithCustomError(processRegistry, "AccessControlUnauthorizedAccount")
           .withArgs(user.address, DEFAULT_ADMIN_ROLE);
       });
@@ -854,7 +845,7 @@ describe("ProcessRegistry test", function () {
         const { processRegistry } = await loadFixture(deployProcessRegistry);
 
         // Add new process admin
-        await expect(processRegistry.connect(deployer).addProcessAdmin(user.address))
+        await expect(processRegistry.connect(deployer).grantRole(PROCESS_ADMIN_ROLE, user.address))
           .not.to.be.reverted;
         
         expect(await processRegistry.hasRole(PROCESS_ADMIN_ROLE, user.address)).to.be.true;
@@ -866,27 +857,19 @@ describe("ProcessRegistry test", function () {
         const { processRegistry } = await loadFixture(deployProcessRegistry);
 
         // Add admin first
-        await processRegistry.connect(deployer).addProcessAdmin(user.address);
+        await processRegistry.connect(deployer).grantRole(PROCESS_ADMIN_ROLE, user.address);
         expect(await processRegistry.hasRole(PROCESS_ADMIN_ROLE, user.address)).to.be.true;
 
         // Remove admin
-        await processRegistry.connect(deployer).removeProcessAdmin(user.address);
+        await processRegistry.connect(deployer).revokeRole(PROCESS_ADMIN_ROLE, user.address);
         expect(await processRegistry.hasRole(PROCESS_ADMIN_ROLE, user.address)).to.be.false;
-      });
-
-      it("Should revert if admin address is zero", async function () {
-        const { processRegistry } = await loadFixture(deployProcessRegistry);
-
-        await expect(processRegistry.connect(deployer).removeProcessAdmin(ZeroAddress))
-          .to.be.revertedWithCustomError(processRegistry, "InvalidAddress")
-          .withArgs(ZeroAddress);
       });
 
       it("Should revert if caller is not default admin", async function () {
         const { processRegistry } = await loadFixture(deployProcessRegistry);
         const DEFAULT_ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-        await expect(processRegistry.connect(user).removeProcessAdmin(member1.address))
+        await expect(processRegistry.connect(user).revokeRole(PROCESS_ADMIN_ROLE, user.address))
           .to.be.revertedWithCustomError(processRegistry, "AccessControlUnauthorizedAccount")
           .withArgs(user.address, DEFAULT_ADMIN_ROLE);
       });
@@ -896,13 +879,13 @@ describe("ProcessRegistry test", function () {
         const DEFAULT_ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
         // Add admin first
-        await processRegistry.connect(deployer).addProcessAdmin(user.address);
+        await processRegistry.connect(deployer).grantRole(PROCESS_ADMIN_ROLE, user.address);
 
         // Remove admin
-        await processRegistry.connect(deployer).removeProcessAdmin(user.address);
+        await processRegistry.connect(deployer).revokeRole(PROCESS_ADMIN_ROLE, user.address);
 
         // Removed admin should not be able to add other admins
-        await expect(processRegistry.connect(user).addProcessAdmin(member1.address))
+        await expect(processRegistry.connect(user).grantRole(PROCESS_ADMIN_ROLE, member1.address))
           .to.be.revertedWithCustomError(processRegistry, "AccessControlUnauthorizedAccount")
           .withArgs(user.address, DEFAULT_ADMIN_ROLE);
       });
@@ -911,7 +894,7 @@ describe("ProcessRegistry test", function () {
         const { processRegistry } = await loadFixture(deployProcessRegistry);
 
         // This should not revert even if user doesn't have admin role
-        await expect(processRegistry.connect(deployer).removeProcessAdmin(user.address))
+        await expect(processRegistry.connect(deployer).revokeRole(PROCESS_ADMIN_ROLE, user.address))
           .not.to.be.reverted;
       });
     });

@@ -891,25 +891,20 @@ describe("SchemaRegistry test", function () {
   describe("Access Control Management", function () {
     describe("addSchemaAdmin", function () {
       it("Should allow default admin to add new schema admin", async function () {
-        await schemaRegistry.connect(deployer).addSchemaAdmin(user.address);
+        await schemaRegistry.connect(deployer).grantRole(SCHEMA_ADMIN_ROLE, user.address);
         expect(await schemaRegistry.hasRole(SCHEMA_ADMIN_ROLE, user.address)).to.be.true;
       });
 
-      it("Should revert if admin address is zero", async function () {
-        await expect(schemaRegistry.connect(deployer).addSchemaAdmin(ethers.ZeroAddress))
-          .to.be.revertedWithCustomError(schemaRegistry, "InvalidAddress");
-      });
-
       it("Should revert if caller is not default admin", async function () {
-        await expect(schemaRegistry.connect(user).addSchemaAdmin(member1.address))
+        await expect(schemaRegistry.connect(user).grantRole(SCHEMA_ADMIN_ROLE, member1.address))
           .to.be.revertedWithCustomError(schemaRegistry, "AccessControlUnauthorizedAccount");
       });
     });
 
     describe("removeSchemaAdmin", function () {
       it("Should allow default admin to remove schema admin", async function () {
-        await schemaRegistry.connect(deployer).addSchemaAdmin(user.address);
-        await schemaRegistry.connect(deployer).removeSchemaAdmin(user.address);
+        await schemaRegistry.connect(deployer).grantRole(SCHEMA_ADMIN_ROLE, user.address);
+        await schemaRegistry.connect(deployer).revokeRole(SCHEMA_ADMIN_ROLE, user.address);
         expect(await schemaRegistry.hasRole(SCHEMA_ADMIN_ROLE, user.address)).to.be.false;
       });
     });

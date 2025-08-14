@@ -18,7 +18,6 @@ library AccessChannelValidations {
     error ChannelNotActive(bytes32 channelName);
     error CreatorCannotBeMember(bytes32 channelName, address member);
     error MemberAlreadyInChannel(bytes32 channelName, address member);
-    error InvalidMemberAddress(address member);
     error MemberNotInChannel(bytes32 channelName, address member);
     error ChannelMemberLimitExceeded(bytes32 channelName, uint256 limit);
     error EmptyMemberArray();
@@ -31,17 +30,6 @@ library AccessChannelValidations {
     // =============================================================
     //                     VALIDATION FUNCTIONS
     // =============================================================
-    
-    /**
-     * @dev Validates that an address is not zero
-     * @param addr Address to validate
-     */
-    function validateAddress(address addr) internal pure {
-        if (addr == address(0)) {
-            revert InvalidMemberAddress(addr);
-        }
-    }
-    
     /**
      * @dev Validates that a channel exists
      * @param exists Channel existence flag

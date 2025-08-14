@@ -8,7 +8,8 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {
     PROCESS_ADMIN_ROLE,
     MAX_STRING_LENGTH,
-    SCHEMA_REGISTRY
+    SCHEMA_REGISTRY,
+    MAX_SCHEMAS_PER_PROCESS
     } from "./lib/Constants.sol";
 import {Utils} from "./lib/Utils.sol";
 import {ChannelAccess} from "./lib/ChannelAccess.sol";
@@ -84,7 +85,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         uint256 schemasLength = processInput.schemas.length;
         _validateActionRequiresSchemas(processInput.action, schemasLength);
 
-        if (schemasLength > 0) {
+        if (schemasLength > 0 && schemasLength <= MAX_SCHEMAS_PER_PROCESS) {
            _validateSchemas(processInput.channelName, processInput.schemas);
         }
 
@@ -434,20 +435,6 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
                 revert SchemaNotFoundInChannel(channelName, schemas[i].schemaId, schemas[i].version);
             }
         }
-    }
-
-    // =============================================================
-    //                    ACCESS CONTROL HELPERS
-    // =============================================================
-
-    function addProcessAdmin(address newProcessAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newProcessAdmin == address(0)) revert InvalidAddress(newProcessAdmin);
-        _grantRole(PROCESS_ADMIN_ROLE, newProcessAdmin);
-    }
-
-    function removeProcessAdmin(address addressProcessAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (addressProcessAdmin == address(0)) revert InvalidAddress(addressProcessAdmin);
-        _revokeRole(PROCESS_ADMIN_ROLE, addressProcessAdmin);
     }
 
     // =============================================================

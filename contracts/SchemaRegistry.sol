@@ -289,28 +289,6 @@ contract SchemaRegistry is Context, BaseTraceContract, ISchemaRegistry {
     }
 
     // =============================================================
-    //                    ACCESS CONTROL HELPERS
-    // =============================================================
-
-    /**
-     * Function to add a new schema admin.
-     * @param newSchemaAdmin Address of the new schema admin
-     */
-    function addSchemaAdmin(address newSchemaAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSchemaAdmin == address(0)) revert InvalidAddress(newSchemaAdmin);
-        _grantRole(SCHEMA_ADMIN_ROLE, newSchemaAdmin);
-    }
-
-    /**
-     * Function to remove a schema admin.
-     * @param addressSchemaAdmin Address of schema admin to remove
-     */
-    function removeSchemaAdmin(address addressSchemaAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (addressSchemaAdmin == address(0)) revert InvalidAddress(addressSchemaAdmin);
-        _revokeRole(SCHEMA_ADMIN_ROLE, addressSchemaAdmin);
-    }
-
-    // =============================================================
     //                    INTERNAL VALIDATION
     // =============================================================
     function _validateSchemaInput(
