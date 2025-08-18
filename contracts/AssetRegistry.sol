@@ -93,6 +93,9 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     mapping(bytes32 => mapping(bytes32 => bytes32[])) private _childAssetsByChannel;
 
+    /**
+     * Modifier to check if the caller is the transaction orchestrator
+     */
     modifier onlyTransactionOrchestrator() {
         address orchestratorAddress = _getAddressDiscovery().getContractAddress(TRANSACTION_ORCHESTRATOR);
         if (_msgSender() != orchestratorAddress) {
@@ -100,8 +103,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
         _;
     }
-
-
 
     // =============================================================
     //                       CONSTRUCTOR
@@ -127,8 +128,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     function createAsset(CreateAssetInput calldata input, address originCaller) 
         external
         nonReentrant
-        validChannelName(input.channelName)
         onlyTransactionOrchestrator()
+        validChannelName(input.channelName)
         onlyChannelMemberAddress(input.channelName, originCaller)
     {
         _validateCreateAssetInput(input);
@@ -177,11 +178,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function updateAsset(UpdateAssetInput calldata update) 
+    function updateAsset(UpdateAssetInput calldata update, address originCaller) 
         external
         nonReentrant
+        onlyTransactionOrchestrator()
         validChannelName(update.channelName)
-        onlyChannelMember(update.channelName) 
+        onlyChannelMemberAddress(update.channelName, originCaller)
     {
         _validateUpdateAssetInput(update);
 
@@ -195,8 +197,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert AssetNotActive(update.channelName, update.assetId);
         }
 
-        if (asset.owner != _msgSender()) {
-            revert NotAssetOwner(update.channelName, update.assetId, _msgSender());
+        if (asset.owner != originCaller) {
+            revert NotAssetOwner(update.channelName, update.assetId, originCaller);
         }
 
         asset.idLocal = update.idLocal;
@@ -229,11 +231,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function transferAsset(TransferAssetInput calldata transfer) 
+    function transferAsset(TransferAssetInput calldata transfer, address originCaller) 
         external
         nonReentrant 
+        onlyTransactionOrchestrator()
         validChannelName(transfer.channelName)
-        onlyChannelMember(transfer.channelName)
+        onlyChannelMemberAddress(transfer.channelName, originCaller)
     {
         _validateTransferAssetInput(transfer);
 
@@ -247,8 +250,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert AssetNotActive(transfer.channelName, transfer.assetId);
         }
 
-        if (asset.owner != _msgSender()) {
-            revert NotAssetOwner(transfer.channelName, transfer.assetId, _msgSender());
+        if (asset.owner != originCaller) {
+            revert NotAssetOwner(transfer.channelName, transfer.assetId, originCaller);
         }
 
         if (asset.owner == transfer.newOwner) {
@@ -289,11 +292,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function transformAsset(TransformAssetInput calldata transform) 
+    function transformAsset(TransformAssetInput calldata transform, address originCaller) 
         external
         nonReentrant
-        validChannelName(transform.channelName) 
-        onlyChannelMember(transform.channelName)
+        onlyTransactionOrchestrator()
+        validChannelName(transform.channelName)
+        onlyChannelMemberAddress(transform.channelName, originCaller)
     {
         _validateTransformAssetInput(transform);
 
@@ -307,8 +311,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert AssetNotActive(transform.channelName, transform.assetId);
         }
 
-        if (originalAsset.owner != _msgSender()) {
-            revert NotAssetOwner(transform.channelName, transform.assetId, _msgSender());
+        if (originalAsset.owner != originCaller) {
+            revert NotAssetOwner(transform.channelName, transform.assetId, originCaller);
         }
 
         uint256 currentDepth = _getTransformationDepth(transform.channelName, transform.assetId);
@@ -395,11 +399,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function splitAsset(SplitAssetInput calldata split) 
+    function splitAsset(SplitAssetInput calldata split, address originCaller) 
         external
         nonReentrant
+        onlyTransactionOrchestrator()
         validChannelName(split.channelName)
-        onlyChannelMember(split.channelName) 
+        onlyChannelMemberAddress(split.channelName, originCaller)
     {
         _validateSplitAssetInput(split);
 
@@ -413,8 +418,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert AssetNotActive(split.channelName, split.assetId);
         }
     
-        if (originalAsset.owner != _msgSender()) {
-            revert NotAssetOwner(split.channelName, split.assetId, _msgSender());
+        if (originalAsset.owner != originCaller) {
+            revert NotAssetOwner(split.channelName, split.assetId, originCaller);
         }
 
         //1. Validar conservação da quantidade (amount)
@@ -503,14 +508,15 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function groupAssets(GroupAssetsInput calldata group) 
+    function groupAssets(GroupAssetsInput calldata group, address originCaller) 
         external
         nonReentrant
+        onlyTransactionOrchestrator()
         validChannelName(group.channelName)
-        onlyChannelMember(group.channelName)
+        onlyChannelMemberAddress(group.channelName, originCaller)
     {
         _validateGroupAssetsInput(group);
-        uint256 totalAmounts = _validateAssetsAndAmountConservation(group);
+        uint256 totalAmounts = _validateAssetsAndAmountConservation(group, originCaller);
 
         //1. Inativar assets a serem agrupados
         for (uint256 i = 0; i < group.assetIds.length; i++) {
@@ -532,7 +538,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         Asset storage groupAsset = _assetsByChannel[group.channelName][group.groupAssetId];
 
         groupAsset.assetId = group.groupAssetId;  // User-defined ID
-        groupAsset.owner = _msgSender();           // Owner dos assets originais
+        groupAsset.owner = originCaller;           // Owner dos assets originais
         groupAsset.amount = totalAmounts;         // Total amount (já validado conservation)
         groupAsset.idLocal = group.idLocal;      // Nova localização do grupo
 
@@ -556,18 +562,18 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         groupAsset.operation = AssetOperation.GROUP;
         groupAsset.createdAt = Utils.timestamp();
         groupAsset.lastUpdated = Utils.timestamp();
-        groupAsset.originOwner = _msgSender();
+        groupAsset.originOwner = originCaller;
 
         //3. Registrar existência e indexação
         _assetExistsByChannel[group.channelName][group.groupAssetId] = true;
-        _addAssetToOwner(group.channelName, group.groupAssetId, _msgSender());
+        _addAssetToOwner(group.channelName, group.groupAssetId, originCaller);
         _addAssetToStatus(group.channelName, group.groupAssetId, AssetStatus.ACTIVE);
         _addToHistory(group.channelName, group.groupAssetId, AssetOperation.GROUP, Utils.timestamp());
 
         emit AssetsGrouped(
             group.assetIds,
             group.groupAssetId,
-            _msgSender(),
+            originCaller,
             totalAmounts,
             Utils.timestamp()
         );
@@ -576,11 +582,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function ungroupAssets(UngroupAssetsInput calldata ungroup) 
+    function ungroupAssets(UngroupAssetsInput calldata ungroup, address originCaller) 
         external
         nonReentrant
+        onlyTransactionOrchestrator()
         validChannelName(ungroup.channelName)
-        onlyChannelMember(ungroup.channelName)
+        onlyChannelMemberAddress(ungroup.channelName, originCaller)    
     {
         _validateUngroupAssetsInput(ungroup);
 
@@ -594,8 +601,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert AssetNotActive(ungroup.channelName, ungroup.assetId);
         }
         
-        if (groupAsset.owner != _msgSender()) {
-            revert NotAssetOwner(ungroup.channelName, ungroup.assetId, _msgSender());
+        if (groupAsset.owner != originCaller) {
+            revert NotAssetOwner(ungroup.channelName, ungroup.assetId, originCaller);
         }
 
         _validateCanUngroup(groupAsset);
@@ -661,11 +668,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function inactivateAsset(InactivateAssetInput calldata inactivate) 
+    function inactivateAsset(InactivateAssetInput calldata inactivate, address originCaller) 
         external 
         nonReentrant
+        onlyTransactionOrchestrator()
         validChannelName(inactivate.channelName)
-        onlyChannelMember(inactivate.channelName)    
+        onlyChannelMemberAddress(inactivate.channelName, originCaller)   
     {
         _validateInactivateAssetInput(inactivate);
         
@@ -679,8 +687,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert AssetNotActive(inactivate.channelName, inactivate.assetId);
         }
         
-        if (asset.owner != _msgSender()) {
-            revert NotAssetOwner(inactivate.channelName, inactivate.assetId, _msgSender());
+        if (asset.owner != originCaller) {
+            revert NotAssetOwner(inactivate.channelName, inactivate.assetId, originCaller);
         }
         
         if (bytes(inactivate.finalLocation).length > 0) {
@@ -949,9 +957,9 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
     }
 
-    function _validateAssetsAndAmountConservation(GroupAssetsInput calldata input) internal view returns (uint256) {
+    function _validateAssetsAndAmountConservation(GroupAssetsInput calldata input, address originalOwner) internal view returns (uint256) {
         uint256 totalOriginalAmounts = 0;
-        address expectedOwner = _msgSender();
+        address expectedOwner = originalOwner;
         
         // Validar cada asset e acumular amounts
         for (uint256 i = 0; i < input.assetIds.length; i++) {
@@ -1114,14 +1122,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     }
 
     function _generateSplitAssetId(bytes32 originalAssetId, uint256 index, bytes32 channelName) 
-        internal view returns (bytes32) 
+        internal pure returns (bytes32) 
     {
         return keccak256(abi.encodePacked(
             originalAssetId, 
             index, 
-            channelName, 
-            block.number,
-            _msgSender()  
+            channelName
         ));
     }
 

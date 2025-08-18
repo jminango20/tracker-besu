@@ -26,7 +26,7 @@ import {
 } from "./utils/index";
 import hre from "hardhat";
 
-describe.only("AssetRegistry test", function () {
+describe("AssetRegistry test", function () {
 
   let accounts: any;
   let deployer: HardhatEthersSigner;
@@ -60,7 +60,7 @@ describe.only("AssetRegistry test", function () {
     });
   });
 
-  describe.only("createAsset", function () {
+  describe("createAsset", function () {
     it("Should allow channel member to create asset", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
@@ -325,6 +325,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow asset owner to update all fields", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // First create an asset
       const createInput = {
         assetId: ASSET_1,
@@ -335,7 +338,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Then update it
       const updateInput = {
@@ -346,7 +349,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2, DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .not.to.be.reverted;
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -362,6 +365,9 @@ describe.only("AssetRegistry test", function () {
     it("Should emit AssetUpdated event", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset first
       const createInput = {
         assetId: ASSET_1,
@@ -372,7 +378,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Update asset
       const updateInput = {
@@ -383,13 +389,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetUpdated")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member1.address, DEFAULT_AMOUNT + 100, LOCATION_B, anyValue);
     });
 
     it("Should update only location when amount is zero", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -401,7 +410,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Update with amount = 0 (should not change amount)
       const updateInput = {
@@ -412,7 +421,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).updateAsset(updateInput);
+      await assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.amount).to.equal(DEFAULT_AMOUNT); // Should remain unchanged
@@ -422,6 +431,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should preserve asset ownership and creation details", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -433,7 +445,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
 
       // Update asset
@@ -445,7 +457,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).updateAsset(updateInput);
+      await assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address);
       const updatedAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
 
       // These should remain unchanged
@@ -463,6 +475,9 @@ describe.only("AssetRegistry test", function () {
     it("Should completely replace dataHashes array", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset with multiple dataHashes
       const createInput = {
         assetId: ASSET_1,
@@ -473,7 +488,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Update with single dataHash
       const updateInput = {
@@ -484,7 +499,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).updateAsset(updateInput);
+      await assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.dataHashes.length).to.equal(1);
@@ -494,6 +509,9 @@ describe.only("AssetRegistry test", function () {
     it("Should revert if asset does not exist", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       const updateInput = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
@@ -502,13 +520,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if asset is not active", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -520,7 +541,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate asset
       const inactivateInput = {
@@ -530,7 +551,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Try to update inactive asset
       const updateInput = {
@@ -541,13 +562,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if caller is not asset owner", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -559,7 +583,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to update with member2 (not owner)
       const updateInput = {
@@ -570,13 +594,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member2).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member2.address))
         .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
     });
 
     it("Should revert if caller is not channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -588,7 +615,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to update with non-channel member
       const updateInput = {
@@ -599,13 +626,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.user).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.user.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should revert with invalid input validations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset first
       const createInput = {
@@ -617,7 +647,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Test invalid assetId
       let updateInput = {
@@ -628,7 +658,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
         .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
 
@@ -641,7 +671,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
 
       // Test empty dataHashes
@@ -653,12 +683,15 @@ describe.only("AssetRegistry test", function () {
         dataHashes: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
     });
 
     it("Should add update operation to asset history", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -670,7 +703,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Update asset
       const updateInput = {
@@ -681,7 +714,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).updateAsset(updateInput);
+      await assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address);
 
       const [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
       
@@ -695,6 +728,9 @@ describe.only("AssetRegistry test", function () {
     it("Should handle multiple consecutive updates", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -705,7 +741,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // First update
       let updateInput = {
@@ -716,7 +752,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).updateAsset(updateInput);
+      await assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address);
 
       // Second update
       updateInput = {
@@ -727,7 +763,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1, DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput))
+      await expect(assetRegistry.connect(accounts.member1).updateAsset(updateInput, accounts.member1.address))
         .not.to.be.reverted;
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -748,6 +784,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow asset owner to transfer to another channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset with member1
       const createInput = {
         assetId: ASSET_1,
@@ -758,7 +797,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transfer to member2
       const transferInput = {
@@ -770,7 +809,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_2, EXTERNAL_ID_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .not.to.be.reverted;
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -798,6 +837,9 @@ describe.only("AssetRegistry test", function () {
     it("Should emit AssetTransferred event", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+      
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -808,7 +850,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transfer asset
       const transferInput = {
@@ -820,13 +862,16 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetTransferred")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member1.address, accounts.member2.address, LOCATION_B, anyValue);
     });
 
     it("Should update owner enumeration mappings correctly", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -838,7 +883,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Verify member1 owns the asset
       let [member1Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
@@ -859,7 +904,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address);
 
       // Verify ownership changed in enumeration
       [member1Assets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
@@ -873,6 +918,9 @@ describe.only("AssetRegistry test", function () {
     it("Should preserve asset metadata and not modify amounts", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -883,7 +931,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
 
       // Transfer asset
@@ -896,7 +944,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_2]
       };
 
-      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address);
       const transferredAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
 
       // These should remain unchanged
@@ -918,6 +966,9 @@ describe.only("AssetRegistry test", function () {
     it("Should handle transfer with empty external IDs", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset with external IDs
       const createInput = {
         assetId: ASSET_1,
@@ -928,7 +979,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1, EXTERNAL_ID_2]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transfer with empty external IDs
       const transferInput = {
@@ -940,7 +991,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [] // Empty array should clear external IDs
       };
 
-      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.externalIds.length).to.equal(0);
@@ -948,6 +999,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should handle optional location update", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -959,7 +1013,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transfer with new location
       const transferInput = {
@@ -971,7 +1025,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.idLocal).to.equal(LOCATION_B);
@@ -979,6 +1033,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should revert if asset does not exist", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const transferInput = {
         assetId: ASSET_1,
@@ -989,13 +1046,16 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if asset is not active", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -1007,7 +1067,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate asset
       const inactivateInput = {
@@ -1017,7 +1077,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Try to transfer inactive asset
       const transferInput = {
@@ -1029,13 +1089,16 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if caller is not asset owner", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -1047,7 +1110,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to transfer with member2 (not owner)
       const transferInput = {
@@ -1059,13 +1122,16 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member2).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member2.address))
         .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
     });
 
     it("Should revert if transferring to same owner", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -1077,7 +1143,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to transfer to same owner
       const transferInput = {
@@ -1089,13 +1155,16 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "TransferToSameOwner")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member1.address);
     });
 
     it("Should revert if caller is not channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -1107,7 +1176,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to transfer with non-channel member
       const transferInput = {
@@ -1119,13 +1188,16 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.user).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.user.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should revert with invalid input validations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset first
       const createInput = {
@@ -1137,7 +1209,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Test invalid assetId
       let transferInput = {
@@ -1149,7 +1221,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
         .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
 
@@ -1163,7 +1235,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAddress")
         .withArgs(ZeroAddress);
 
@@ -1177,7 +1249,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
 
       // Test empty dataHashes
@@ -1190,12 +1262,15 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
     });
 
     it("Should revert if newOwner is not a channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -1207,7 +1282,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to transfer to user (not a channel member)
       const transferInput = {
@@ -1219,13 +1294,16 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should add transfer operation to asset history", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -1237,7 +1315,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transfer asset
       const transferInput = {
@@ -1249,7 +1327,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).transferAsset(transferInput);
+      await assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address);
 
       const [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
       
@@ -1261,7 +1339,10 @@ describe.only("AssetRegistry test", function () {
     });
 
     it("Should handle multiple consecutive transfers", async function () {
-      const { assetRegistry, accessChannelManager } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, accessChannelManager, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -1273,7 +1354,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // First transfer: member1 -> member2
       let transferInput = {
@@ -1286,7 +1367,7 @@ describe.only("AssetRegistry test", function () {
       };
 
       //CAPTURE FIRST TRANSFER EVENT
-      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetTransferred")
         .withArgs(
           CHANNEL_1, 
@@ -1316,7 +1397,7 @@ describe.only("AssetRegistry test", function () {
       };
 
       //CAPTURE SECOND TRANSFER EVENT
-      await expect(assetRegistry.connect(accounts.member2).transferAsset(transferInput))
+      await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member2.address))
         .to.emit(assetRegistry, "AssetTransferred")
         .withArgs(
           CHANNEL_1, 
@@ -1358,6 +1439,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow asset owner to transform asset with new amount", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create original asset
       const createInput = {
         assetId: ASSET_1,
@@ -1368,7 +1452,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transform asset
       const transformInput = {
@@ -1380,7 +1464,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2, DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .not.to.be.reverted;
 
       // Check original asset is now inactive
@@ -1418,6 +1502,9 @@ describe.only("AssetRegistry test", function () {
     it("Should inherit amount from original when new amount is zero", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create original asset
       const createInput = {
         assetId: ASSET_1,
@@ -1428,7 +1515,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transform with amount = 0 (should inherit)
       const transformInput = {
@@ -1440,7 +1527,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address);
 
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       const newAssetId = originalAsset.childAssets[0];
@@ -1452,6 +1539,9 @@ describe.only("AssetRegistry test", function () {
     it("Should emit AssetTransformed event", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -1462,7 +1552,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transform asset
       const transformInput = {
@@ -1475,13 +1565,16 @@ describe.only("AssetRegistry test", function () {
       };
 
       // The event should emit with original assetId and generated new assetId
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetTransformed")
         .withArgs(ASSET_1, anyValue, accounts.member1.address, "PROCESSING-001", anyValue);
     });
 
     it("Should inherit grouping state from original asset", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create multiple assets for grouping
       const createInput1 = {
@@ -1502,8 +1595,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_ASSET"));
@@ -1516,7 +1609,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Transform the group asset
       const transformInput = {
@@ -1528,7 +1621,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address);
 
       // Check that new asset inherited grouped assets
       const originalGroup = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
@@ -1543,6 +1636,9 @@ describe.only("AssetRegistry test", function () {
     it("Should update asset status and owner enumeration correctly", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -1553,7 +1649,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Check initial status enumeration
       let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10); // ACTIVE
@@ -1573,7 +1669,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address);
 
       // Check status enumeration after transform
       [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10); // ACTIVE
@@ -1596,6 +1692,9 @@ describe.only("AssetRegistry test", function () {
     it("Should add transform operations to both assets history", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -1606,7 +1705,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transform asset
       const transformInput = {
@@ -1618,7 +1717,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address);
 
       // Check original asset history
       let [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
@@ -1637,6 +1736,9 @@ describe.only("AssetRegistry test", function () {
     it("Should revert if asset does not exist", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       const transformInput = {
         assetId: ASSET_1,
         transformationId: "NON-EXISTENT-TEST",
@@ -1646,13 +1748,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if asset is not active", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -1664,7 +1769,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate asset
       const inactivateInput = {
@@ -1674,7 +1779,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Try to transform inactive asset
       const transformInput = {
@@ -1686,13 +1791,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if caller is not asset owner", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -1704,7 +1812,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to transform with member2 (not owner)
       const transformInput = {
@@ -1716,13 +1824,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member2).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member2.address))
         .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
     });
 
     it("Should revert if caller is not channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -1734,7 +1845,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to transform with non-channel member
       const transformInput = {
@@ -1746,13 +1857,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.user).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.user.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should revert with invalid input validations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset first
       const createInput = {
@@ -1764,7 +1878,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Test invalid assetId
       let transformInput = {
@@ -1776,7 +1890,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
         .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
 
@@ -1790,7 +1904,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidTransformationId");
 
       // Test very long transformationId (>64 chars)
@@ -1803,7 +1917,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidTransformationId");
 
       // Test empty location
@@ -1816,7 +1930,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
 
       // Test empty dataHashes
@@ -1829,12 +1943,15 @@ describe.only("AssetRegistry test", function () {
         dataHashes: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+      await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
     });
 
     it("Should handle transformation chains and prevent infinite depth", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create original asset
       const createInput = {
@@ -1846,7 +1963,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       let currentAssetId = ASSET_1;
 
@@ -1862,7 +1979,7 @@ describe.only("AssetRegistry test", function () {
           dataHashes: [DATA_HASH_1]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+        await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
           .not.to.be.reverted;
 
         // Get the new asset ID for next iteration
@@ -1887,6 +2004,9 @@ describe.only("AssetRegistry test", function () {
     it("Should revert if transformation would exceed max depth", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
         // Create original asset
         const createInput = {
             assetId: ASSET_1,
@@ -1897,7 +2017,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         let currentAssetId = ASSET_1;
 
@@ -1913,7 +2033,7 @@ describe.only("AssetRegistry test", function () {
             };
 
             //Transformações 1-20 devem passar
-            await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput))
+            await expect(assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address))
                 .not.to.be.reverted;
 
             const asset = await assetRegistry.getAsset(CHANNEL_1, currentAssetId);
@@ -1935,7 +2055,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_1]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).transformAsset(exceedDepthTransform))
+        await expect(assetRegistry.connect(accounts.member1).transformAsset(exceedDepthTransform, accounts.member1.address))
             .to.be.revertedWithCustomError(assetRegistry, "TransformationChainTooDeep")
             .withArgs(21, 20); //(currentDepth + 1, maxDepth)
 
@@ -1953,6 +2073,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should generate unique asset IDs for transformations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create two identical assets
       const createInput1 = {
@@ -1973,8 +2096,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Transform both with same transformationId
       const transformInput1 = {
@@ -1995,8 +2118,8 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).transformAsset(transformInput1);
-      await assetRegistry.connect(accounts.member1).transformAsset(transformInput2);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput2, accounts.member1.address);
 
       // Get the new asset IDs
       const asset1 = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -2021,6 +2144,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow asset owner to split asset into multiple parts", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
         // Create original asset
         const createInput = {
             assetId: ASSET_1,
@@ -2031,7 +2157,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: [EXTERNAL_ID_1]
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         // Split asset
         const splitInput = {
@@ -2042,7 +2168,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .not.to.be.reverted;
 
         // Check original asset is now inactive
@@ -2077,6 +2203,9 @@ describe.only("AssetRegistry test", function () {
     it("Should emit AssetSplit event", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
         // Create and split asset
         const createInput = {
             assetId: ASSET_1,
@@ -2087,7 +2216,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2097,13 +2226,16 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .to.emit(assetRegistry, "AssetSplit")
             .withArgs(ASSET_1, anyValue, accounts.member1.address, [200, 300], anyValue);
     });
 
     it("Should revert if amounts don't sum to original amount", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2114,7 +2246,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2124,13 +2256,16 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .to.be.revertedWithCustomError(assetRegistry, "AmountConservationViolated")
             .withArgs(DEFAULT_AMOUNT, SPLIT_AMOUNT_1 + SPLIT_AMOUNT_2 + SPLIT_AMOUNT_1);
     });
 
     it("Should revert if amounts and dataHashes arrays have different lengths", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2141,7 +2276,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2151,12 +2286,15 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4] // 3 dataHashes
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .to.be.revertedWithCustomError(assetRegistry, "ArrayLengthMismatch");
     });
 
     it("Should revert if any amount is zero", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2167,7 +2305,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2177,13 +2315,16 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .to.be.revertedWithCustomError(assetRegistry, "InvalidSplitAmount")
             .withArgs(0);
     });
 
     it("Should update owner and status enumerations correctly", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2194,7 +2335,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         // Check initial state
         let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -2212,7 +2353,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
-        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
 
         // Check final state
         [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -2228,6 +2369,9 @@ describe.only("AssetRegistry test", function () {
     it("Should revert if caller is not asset owner", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
         const createInput = {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
@@ -2237,7 +2381,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2247,7 +2391,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
-        await expect(assetRegistry.connect(accounts.member2).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member2.address))
             .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
             .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
     });
@@ -2255,6 +2399,9 @@ describe.only("AssetRegistry test", function () {
     it("Should add split operations to asset history", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
         const createInput = {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
@@ -2264,7 +2411,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2274,7 +2421,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
-        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
 
         // Check original asset history
         let [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
@@ -2294,6 +2441,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should handle minimum split (2 parts)", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2304,7 +2454,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2314,12 +2464,15 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .not.to.be.reverted;
     });
 
     it("Should handle maximum number of splits", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2330,7 +2483,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         // Supondo limite máximo de 10 divisões
         const amounts = new Array(10).fill(10);
@@ -2344,12 +2497,15 @@ describe.only("AssetRegistry test", function () {
             dataHashes: dataHashes
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .not.to.be.reverted;
     });
 
     it("Should handle large amounts correctly", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const largeAmount = hre.ethers.parseUnits("1000000", 18); // 1M tokens
         
@@ -2362,7 +2518,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2375,12 +2531,15 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .not.to.be.reverted;
     });
 
     it("Should revert with empty amounts array", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2391,7 +2550,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2401,12 +2560,15 @@ describe.only("AssetRegistry test", function () {
             dataHashes: []
         };
 
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .to.be.revertedWithCustomError(assetRegistry, "EmptyAmountsArray");
     });
 
     it("Should revert with single amount (meaningless split)", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2417,7 +2579,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2427,12 +2589,15 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2]
         };
             
-        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
           .to.be.revertedWithCustomError(assetRegistry, "InsufficientSplitParts");
     });
 
     it("Should handle gas efficiently for multiple splits", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2443,7 +2608,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2453,7 +2618,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4, DATA_HASH_2, DATA_HASH_3]
         };
 
-        const tx = await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+        const tx = await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
         const receipt = await tx.wait();
         
         expect(receipt?.gasUsed).to.be.lessThan(3000000); 
@@ -2461,6 +2626,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should generate unique asset IDs for split assets", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2471,7 +2639,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2481,7 +2649,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
         };
 
-        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
 
         const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
         const childIds = originalAsset.childAssets;
@@ -2496,6 +2664,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should revert if caller is not channel member", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         // Criar asset como member1
         const createInput = {
@@ -2507,7 +2678,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2518,13 +2689,16 @@ describe.only("AssetRegistry test", function () {
         };
 
         // Tentar dividir com uma conta que não é membro do canal
-        await expect(assetRegistry.connect(accounts.nonMember).splitAsset(splitInput))
+        await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.nonMember.address))
             .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
             .withArgs(CHANNEL_1, accounts.nonMember.address);
     });
 
     it("Should preserve asset metadata correctly in split assets", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2535,7 +2709,7 @@ describe.only("AssetRegistry test", function () {
             externalIds: [EXTERNAL_ID_1]
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         const splitInput = {
             assetId: ASSET_1,
@@ -2545,7 +2719,7 @@ describe.only("AssetRegistry test", function () {
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
-        await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+        await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
 
         const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
         
@@ -2566,6 +2740,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow owner to group multiple assets into a single group asset", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create multiple assets to group
       const createInput1 = {
         assetId: ASSET_1,
@@ -2585,8 +2762,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_2]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_ASSET"));
@@ -2598,7 +2775,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3, DATA_HASH_4]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .not.to.be.reverted;
 
       // Check original assets are now inactive
@@ -2650,6 +2827,9 @@ describe.only("AssetRegistry test", function () {
     it("Should emit AssetsGrouped event", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create assets
       const createInput1 = {
         assetId: ASSET_1,
@@ -2669,8 +2849,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("EVENT_GROUP"));
@@ -2682,13 +2862,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetsGrouped")
         .withArgs([ASSET_1, ASSET_2], GROUP_ASSET, accounts.member1.address, SPLIT_AMOUNT_1 + SPLIT_AMOUNT_2, anyValue);
     });
 
     it("Should update owner and status enumerations correctly", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);      
 
       // Create multiple assets
       const createInput1 = {
@@ -2718,9 +2901,9 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput3);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput3, accounts.member1.address);
 
       // Check initial state
       let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -2739,7 +2922,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_4]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Check final state
       [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -2754,6 +2937,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should add group operations to asset history", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);      
 
       // Create assets
       const createInput1 = {
@@ -2774,8 +2960,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("HISTORY_GROUP"));
@@ -2787,7 +2973,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Check original assets history
       let [operations1, timestamps1] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
@@ -2809,6 +2995,9 @@ describe.only("AssetRegistry test", function () {
     it("Should revert if group asset ID already exists", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);      
+
       // Create assets
       const createInput1 = {
         assetId: ASSET_1,
@@ -2828,8 +3017,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Use ASSET_1 as group asset ID (already exists)
       const groupInput = {
@@ -2840,13 +3029,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "GroupAssetAlreadyExists")
         .withArgs(ASSET_1);
     });
 
     it("Should revert if any asset to group does not exist", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);      
 
       // Create only one asset
       const createInput = {
@@ -2858,7 +3050,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to group with non-existent asset
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_NONEXISTENT"));
@@ -2870,13 +3062,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
         .withArgs(CHANNEL_1, ASSET_2);
     });
 
     it("Should revert if any asset is not active", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create assets
       const createInput1 = {
@@ -2897,8 +3092,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Inactivate one asset
       const inactivateInput = {
@@ -2908,7 +3103,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_3
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Try to group with inactive asset
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_INACTIVE"));
@@ -2920,13 +3115,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_4]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
         .withArgs(CHANNEL_1, ASSET_2);
     });
 
     it("Should revert if assets have different owners", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput1 = {
@@ -2948,8 +3146,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member2).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member2.address);
 
       // Try to group assets with different owners
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_MIXED_OWNERS"));
@@ -2961,13 +3159,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "MixedOwnershipNotAllowed")
         .withArgs(accounts.member1.address, accounts.member2.address);
     });
 
     it("Should revert if caller is not channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create assets as member1
       const createInput1 = {
@@ -2988,8 +3189,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Try to group with non-channel member
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_NON_MEMBER"));
@@ -3001,13 +3202,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.user).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.user.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should revert with invalid input validations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create some assets for testing
       const createInput1 = {
@@ -3028,8 +3232,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Test invalid groupAssetId
       let groupInput = {
@@ -3040,7 +3244,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
         .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
 
@@ -3053,7 +3257,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
 
       // Test empty dataHashes
@@ -3065,7 +3269,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
 
       // Test insufficient assets to group (less than 2)
@@ -3077,13 +3281,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InsufficientAssetsToGroup")
         .withArgs(1, 2); // MIN_GROUP_SIZE should be 2
     });
 
     it("Should revert with duplicate assets in group", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create assets
       const createInput1 = {
@@ -3095,7 +3302,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
 
       // Try to group with duplicate assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_DUPLICATES"));
@@ -3107,12 +3314,15 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "DuplicateAssetsInGroup");
     });
 
     it("Should revert with self-reference in group", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create assets
       const createInput1 = {
@@ -3133,8 +3343,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Try to include group asset ID in the assets to group
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("SELF_REF_GROUP"));
@@ -3146,13 +3356,16 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "SelfReferenceInGroup")
         .withArgs(GROUP_ASSET);
     });
 
     it("Should handle large number of assets efficiently", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const numAssets = 5; // Test with 5 assets
       const assetIds: string[] = [];
@@ -3170,7 +3383,7 @@ describe.only("AssetRegistry test", function () {
           externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
         assetIds.push(assetId);
       }
 
@@ -3184,7 +3397,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2, DATA_HASH_3]
       };
 
-      const tx = await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      const tx = await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
       const receipt = await tx.wait();
 
       expect(receipt?.gasUsed).to.be.lessThan(3000000);
@@ -3205,6 +3418,9 @@ describe.only("AssetRegistry test", function () {
     it("Should handle minimum group size (2 assets)", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create exactly 2 assets
       const createInput1 = {
         assetId: ASSET_1,
@@ -3224,8 +3440,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group with minimum size
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("MIN_GROUP"));
@@ -3237,7 +3453,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .not.to.be.reverted;
 
       const groupAsset = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
@@ -3246,6 +3462,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should handle grouping assets with different amounts correctly", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create assets with different amounts
       const createInput1 = {
@@ -3275,9 +3494,9 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput3);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput3, accounts.member1.address);
 
       // Group assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("MIXED_AMOUNTS_GROUP"));
@@ -3289,7 +3508,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_4]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .not.to.be.reverted;
 
       const groupAsset = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
@@ -3299,6 +3518,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should preserve asset metadata during grouping", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create assets with external IDs and specific metadata
       const createInput1 = {
@@ -3319,8 +3541,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_2]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const originalAsset1 = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       const originalAsset2 = await assetRegistry.getAsset(CHANNEL_1, ASSET_2);
@@ -3335,7 +3557,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Check that original assets preserve their metadata
       const groupedAsset1 = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -3371,6 +3593,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow group owner to ungroup assets and reactivate them", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create multiple assets to group
       const createInput1 = {
         assetId: ASSET_1,
@@ -3390,8 +3615,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_2]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group assets first
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("UNGROUP_TEST"));
@@ -3403,7 +3628,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Verify assets are grouped and inactive
       const asset1BeforeUngroup = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -3421,7 +3646,7 @@ describe.only("AssetRegistry test", function () {
         dataHash: DATA_HASH_4
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
         .not.to.be.reverted;
 
       // Check group asset is now inactive
@@ -3462,6 +3687,9 @@ describe.only("AssetRegistry test", function () {
     it("Should emit AssetsUngrouped event", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create and group assets
       const createInput1 = {
         assetId: ASSET_1,
@@ -3481,8 +3709,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("EVENT_UNGROUP"));
       const groupInput = {
@@ -3493,7 +3721,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Ungroup and check event
       const ungroupInput = {
@@ -3503,13 +3731,16 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetsUngrouped")
         .withArgs(GROUP_ASSET, [ASSET_1, ASSET_2], accounts.member1.address, anyValue);
     });
 
     it("Should handle ungroup without optional data updates", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create and group assets
       const createInput1 = {
@@ -3530,8 +3761,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NO_UPDATE_GROUP"));
       const groupInput = {
@@ -3542,7 +3773,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1, DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Ungroup without providing optional updates
       const ungroupInput = {
@@ -3552,7 +3783,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: "" // No update
       };
 
-      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
 
       // Check original data is preserved
       const restoredAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -3565,6 +3796,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should update owner and status enumerations correctly", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create multiple assets
       const createInput1 = {
@@ -3585,8 +3819,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ENUM_TEST"));
@@ -3598,7 +3832,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Check state after grouping
       let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -3618,7 +3852,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
 
       // Check final state
       [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -3639,6 +3873,9 @@ describe.only("AssetRegistry test", function () {
     it("Should add ungroup operations to asset history", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create and group assets
       const createInput1 = {
         assetId: ASSET_1,
@@ -3658,8 +3895,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("HISTORY_TEST"));
       const groupInput = {
@@ -3670,7 +3907,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Ungroup assets
       const ungroupInput = {
@@ -3680,7 +3917,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
 
       // Check group asset history
       let [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, GROUP_ASSET);
@@ -3705,6 +3942,9 @@ describe.only("AssetRegistry test", function () {
     it("Should revert if group asset does not exist", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       const ungroupInput = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
@@ -3712,13 +3952,16 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if group asset is not active", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create and group assets
       const createInput1 = {
@@ -3739,8 +3982,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("INACTIVE_GROUP"));
       const groupInput = {
@@ -3751,7 +3994,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1, DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Inactivate group asset
       const inactivateInput = {
@@ -3761,7 +4004,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_3
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Try to ungroup inactive asset
       const ungroupInput = {
@@ -3771,13 +4014,16 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
         .withArgs(CHANNEL_1, GROUP_ASSET);
     });
 
     it("Should revert if caller is not group asset owner", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create assets with member1
       const createInput1 = {
@@ -3798,8 +4044,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group with member1
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("OWNER_TEST"));
@@ -3811,7 +4057,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1, DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Try to ungroup with member2 (not owner)
       const ungroupInput = {
@@ -3821,13 +4067,16 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.member2).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member2.address))
         .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
         .withArgs(CHANNEL_1, GROUP_ASSET, accounts.member2.address);
     });
 
     it("Should revert if caller is not channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create and group assets
       const createInput1 = {
@@ -3848,8 +4097,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CHANNEL_TEST"));
       const groupInput = {
@@ -3860,7 +4109,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1, DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Try to ungroup with non-channel member
       const ungroupInput = {
@@ -3870,13 +4119,16 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.user).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.user.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should revert if asset is not a group (has no grouped assets)", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create a regular asset (not a group)
       const createInput = {
@@ -3888,7 +4140,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to ungroup a non-group asset
       const ungroupInput = {
@@ -3898,13 +4150,16 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotGrouped")
         .withArgs(ASSET_1);
     });
 
     it("Should revert if asset was already ungrouped", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create and group assets
       const createInput1 = {
@@ -3925,8 +4180,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ALREADY_UNGROUPED"));
       const groupInput = {
@@ -3937,7 +4192,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1, DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // First ungroup (should succeed)
       const ungroupInput = {
@@ -3947,15 +4202,18 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
 
       // Try to ungroup again (should fail)
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive");
     });
 
     it("Should revert with invalid input validations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Test invalid assetId
       const ungroupInput = {
@@ -3965,7 +4223,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
         .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
 
@@ -3977,13 +4235,16 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidChannelName")
         .withArgs(hre.ethers.ZeroHash);
     });
 
     it("Should handle large groups efficiently", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create multiple assets (up to MAX_GROUP_SIZE)
       const assetIds = [];
@@ -4005,7 +4266,7 @@ describe.only("AssetRegistry test", function () {
           externalIds: []
         };
 
-        await assetRegistry.connect(accounts.member1).createAsset(createInput);
+        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
       }
 
       // Group all assets
@@ -4018,7 +4279,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Ungroup all assets
       const ungroupInput = {
@@ -4028,7 +4289,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: LOCATION_A
       };
 
-      const tx = await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+      const tx = await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
       const receipt = await tx.wait();
       
       expect(receipt?.gasUsed).to.be.lessThan(5000000); // Reasonable gas limit
@@ -4046,6 +4307,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should preserve asset metadata correctly after ungroup", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with metadata
       const createInput = {
@@ -4066,8 +4330,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
 
@@ -4081,7 +4345,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_1, DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Ungroup without optional updates
       const ungroupInput = {
@@ -4091,7 +4355,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput);
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
 
       // Check preserved metadata
       const restoredAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -4114,6 +4378,9 @@ describe.only("AssetRegistry test", function () {
     it("Should handle consecutive group and ungroup operations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create assets
       const createInput1 = {
         assetId: ASSET_1,
@@ -4133,8 +4400,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // First group
       const GROUP_ASSET_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONSECUTIVE_1"));
@@ -4146,7 +4413,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput1);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput1, accounts.member1.address);
 
       // First ungroup
       const ungroupInput1 = {
@@ -4156,7 +4423,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: ""
       };
 
-      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput1);
+      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput1, accounts.member1.address);
 
       // Second group (regroup same assets)
       const GROUP_ASSET_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONSECUTIVE_2"));
@@ -4168,7 +4435,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_4]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput2))
+      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput2, accounts.member1.address))
         .not.to.be.reverted;
 
       // Second ungroup
@@ -4179,7 +4446,7 @@ describe.only("AssetRegistry test", function () {
         idLocal: LOCATION_B
       };
 
-      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2))
+      await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2, accounts.member1.address))
         .not.to.be.reverted;
 
       // Verify final state
@@ -4206,6 +4473,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow asset owner to inactivate asset with final location and data", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -4216,7 +4486,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Verify asset is initially active
       expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.true;
@@ -4232,7 +4502,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_3
       };
 
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address))
         .not.to.be.reverted;
 
       // Verify asset is now inactive
@@ -4263,6 +4533,9 @@ describe.only("AssetRegistry test", function () {
     it("Should emit AssetInactivated event", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -4273,7 +4546,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate asset
       const inactivateInput = {
@@ -4283,13 +4556,16 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetInactivated")
         .withArgs(ASSET_1, accounts.member1.address, 8, anyValue); // 3 = INACTIVATE operation
     });
 
     it("Should allow inactivation with only final location (no dataHash)", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -4301,7 +4577,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate with only location update
       const inactivateInput = {
@@ -4311,7 +4587,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: hre.ethers.ZeroHash // No update
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.status).to.equal(1); // INACTIVE
@@ -4324,6 +4600,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow inactivation with only final dataHash (no location)", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -4334,7 +4613,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate with only dataHash update
       const inactivateInput = {
@@ -4344,7 +4623,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.status).to.equal(1); // INACTIVE
@@ -4356,6 +4635,9 @@ describe.only("AssetRegistry test", function () {
     it("Should allow inactivation without any final updates", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -4366,7 +4648,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
 
       // Inactivate without any updates
@@ -4377,7 +4659,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: hre.ethers.ZeroHash // No update
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.status).to.equal(1); // INACTIVE
@@ -4393,6 +4675,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should update owner and status enumerations correctly", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create multiple assets
       const createInput1 = {
@@ -4413,8 +4698,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Check initial state
       let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -4434,7 +4719,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_3
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Check final state
       [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
@@ -4453,6 +4738,9 @@ describe.only("AssetRegistry test", function () {
     it("Should add inactivate operation to asset history", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset
       const createInput = {
         assetId: ASSET_1,
@@ -4463,7 +4751,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate asset
       const inactivateInput = {
@@ -4473,7 +4761,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       const [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
       
@@ -4487,6 +4775,9 @@ describe.only("AssetRegistry test", function () {
     it("Should revert if asset does not exist", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       const inactivateInput = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
@@ -4494,13 +4785,16 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_1
       };
 
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotFound")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if asset is already inactive", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -4512,7 +4806,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // First inactivation (should succeed)
       const inactivateInput = {
@@ -4522,16 +4816,19 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Second inactivation (should fail)
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetNotActive")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if caller is not asset owner", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with member1
       const createInput = {
@@ -4543,7 +4840,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to inactivate with member2 (not owner)
       const inactivateInput = {
@@ -4553,13 +4850,16 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await expect(assetRegistry.connect(accounts.member2).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member2.address))
         .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
     });
 
     it("Should revert if caller is not channel member", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset
       const createInput = {
@@ -4571,7 +4871,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Try to inactivate with non-channel member
       const inactivateInput = {
@@ -4581,13 +4881,16 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await expect(assetRegistry.connect(accounts.user).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.user.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should revert with invalid input validations", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset first
       const createInput = {
@@ -4599,7 +4902,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Test invalid assetId
       const inactivateInput = {
@@ -4609,7 +4912,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
         .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
 
@@ -4621,13 +4924,16 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_2
       };
 
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput2))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput2, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidChannelName")
         .withArgs(hre.ethers.ZeroHash);
     });
 
     it("Should handle inactivation of previously transformed asset", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create original asset
       const createInput = {
@@ -4639,7 +4945,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transform asset
       const transformInput = {
@@ -4651,7 +4957,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2]
       };
 
-      await assetRegistry.connect(accounts.member1).transformAsset(transformInput);
+      await assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address);
 
       // Get the new transformed asset ID
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -4665,7 +4971,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_3
       };
 
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address))
         .not.to.be.reverted;
 
       // Verify transformed asset is inactivated
@@ -4683,6 +4989,9 @@ describe.only("AssetRegistry test", function () {
     it("Should handle inactivation of previously split assets", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset to split
       const createInput = {
         assetId: ASSET_1,
@@ -4693,7 +5002,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Split asset
       const splitInput = {
@@ -4704,7 +5013,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_2, DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).splitAsset(splitInput);
+      await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
 
       // Get split asset IDs
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -4719,7 +5028,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_4
       };
 
-      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput))
+      await expect(assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address))
         .not.to.be.reverted;
 
       // Verify first split asset is inactivated
@@ -4743,6 +5052,9 @@ describe.only("AssetRegistry test", function () {
     it("Should handle large data replacement efficiently", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+
       // Create asset with multiple data hashes
       const originalHashes = [DATA_HASH_1, DATA_HASH_2, DATA_HASH_3, DATA_HASH_4];
       const createInput = {
@@ -4754,7 +5066,7 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Inactivate with single final hash (should replace all)
       const inactivateInput = {
@@ -4764,7 +5076,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: `0x${'f'.repeat(64)}` // Single final hash
       };
 
-      const tx = await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      const tx = await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
       const receipt = await tx.wait();
 
       // Verify replacement worked correctly
@@ -4775,6 +5087,9 @@ describe.only("AssetRegistry test", function () {
 
     it("Should preserve asset relationships after inactivation", async function () {
       const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create and group assets
       const createInput1 = {
@@ -4795,8 +5110,8 @@ describe.only("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
 
       // Group assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("INACTIVATE_GROUP"));
@@ -4808,7 +5123,7 @@ describe.only("AssetRegistry test", function () {
         dataHashes: [DATA_HASH_3]
       };
 
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput);
+      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Inactivate the group asset
       const inactivateInput = {
@@ -4818,7 +5133,7 @@ describe.only("AssetRegistry test", function () {
         finalDataHash: DATA_HASH_4
       };
 
-      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput);
+      await assetRegistry.connect(accounts.member1).inactivateAsset(inactivateInput, accounts.member1.address);
 
       // Verify group asset is inactivated but relationships are preserved
       const groupAsset = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);

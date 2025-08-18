@@ -260,7 +260,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             dataHashes: request.dataHashes
         });
         
-        assetRegistry.updateAsset(input);
+        assetRegistry.updateAsset(input, _msgSender());
         
         affectedAssets = new bytes32[](1);
         affectedAssets[0] = assetId;
@@ -284,7 +284,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             externalIds: request.operationData.externalIds
         });
         
-        assetRegistry.transferAsset(input);
+        assetRegistry.transferAsset(input, _msgSender());
         
         affectedAssets = new bytes32[](1);
         affectedAssets[0] = assetId;
@@ -308,7 +308,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             dataHashes: request.dataHashes
         });
         
-        assetRegistry.transformAsset(input);
+        assetRegistry.transformAsset(input, _msgSender());
         
         // For transform, we return the original asset ID
         // The new asset ID is generated internally by AssetRegistry
@@ -343,7 +343,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             dataHashes: splitDataHashes
         });
         
-        assetRegistry.splitAsset(input);
+        assetRegistry.splitAsset(input, _msgSender());
         
         // For split, we return the original asset ID
         // New asset IDs are generated internally by AssetRegistry
@@ -368,7 +368,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             dataHashes: request.dataHashes
         });
         
-        assetRegistry.groupAssets(input);
+        assetRegistry.groupAssets(input, _msgSender());
         
         // Return both original assets and new group asset
         affectedAssets = new bytes32[](request.targetAssetIds.length + 1);
@@ -396,7 +396,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             dataHash: dataHash
         });
         
-        assetRegistry.ungroupAssets(input);
+        assetRegistry.ungroupAssets(input, _msgSender());
         
         affectedAssets = new bytes32[](1);
         affectedAssets[0] = groupAssetId;
@@ -420,7 +420,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             finalDataHash: finalDataHash
         });
         
-        assetRegistry.inactivateAsset(input);
+        assetRegistry.inactivateAsset(input, _msgSender());
         
         affectedAssets = new bytes32[](1);
         affectedAssets[0] = assetId;

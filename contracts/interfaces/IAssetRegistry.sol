@@ -296,45 +296,52 @@ interface IAssetRegistry {
     /**
      * Update an existing asset
      * @param input Asset update parameters
+     * @param originCaller Origin caller
      */
-    function updateAsset(UpdateAssetInput calldata input) external;
+    function updateAsset(UpdateAssetInput calldata input, address originCaller) external;
 
     /**
      * Transfer asset ownership
      * @param input Transfer parameters
+     * @param originCaller Origin caller
      */
-    function transferAsset(TransferAssetInput calldata input) external;
+    function transferAsset(TransferAssetInput calldata input, address originCaller) external;
 
     /**
      * Transform asset into a new asset
      * @param input Transform parameters
+     * @param originCaller Origin caller
      */
-    function transformAsset(TransformAssetInput calldata input) external;
+    function transformAsset(TransformAssetInput calldata input, address originCaller) external;
 
     /**
      * Split asset into multiple assets
      * @param input Split parameters
+     * @param originCaller Origin caller
      */
-    function splitAsset(SplitAssetInput calldata input) external;
+    function splitAsset(SplitAssetInput calldata input, address originCaller) external;
 
     /**
      * Group multiple assets into one
      * @param input Group parameters
+     * @param originCaller Origin caller
      */
-    function groupAssets(GroupAssetsInput calldata input) external;
+    function groupAssets(GroupAssetsInput calldata input, address originCaller) external;
 
     /**
      * Ungroup assets back to originals
      * @param input Ungroup parameters
+     * @param originCaller Origin caller
      */
 
-    function ungroupAssets(UngroupAssetsInput calldata input) external;
+    function ungroupAssets(UngroupAssetsInput calldata input, address originCaller) external;
 
     /**
      * Permanently inactivate an asset
      * @param input Inactivate parameters
+     * @param originCaller Origin caller
      */
-    function inactivateAsset(InactivateAssetInput calldata input) external;
+    function inactivateAsset(InactivateAssetInput calldata input, address originCaller) external;
 
     // =============================================================
     //                    VIEW FUNCTIONS
