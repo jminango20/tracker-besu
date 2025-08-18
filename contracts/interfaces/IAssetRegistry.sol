@@ -280,6 +280,7 @@ interface IAssetRegistry {
     error TransformationChainTooDeep(uint256 current, uint256 maximum);
     error InsufficientSplitParts(uint256 provided, uint8 minimum);
     error TooManyAssetsForDuplicateCheck(uint256 provided, uint256 maximum);
+    error OnlyTransactionOrchestrator();
 
     // =============================================================
     //                    ASSET REGISTRY
@@ -288,8 +289,9 @@ interface IAssetRegistry {
     /**
      * Create a new asset
      * @param input Asset creation parameters
+     * @param originCaller Origin caller
      */
-    function createAsset(CreateAssetInput calldata input) external;
+    function createAsset(CreateAssetInput calldata input, address originCaller) external;
 
     /**
      * Update an existing asset

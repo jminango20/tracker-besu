@@ -64,6 +64,16 @@ abstract contract BaseTraceContract is Context, AccessControl, ReentrancyGuard {
     }
 
     /**
+     * Ensures caller is a member of the specified channel
+     * @param channelName The name of the channel to check membership for
+     * @param account Account to check
+     */
+    modifier onlyChannelMemberAddress(bytes32 channelName, address account) {
+        ChannelAccess.requireMember(_addressDiscovery, channelName, account);
+        _;
+    }
+
+    /**
      * Validates that channel Name is not empty
      * @param channelName The channel Name to validate
      */

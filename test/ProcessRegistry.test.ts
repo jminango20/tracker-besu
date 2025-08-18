@@ -19,19 +19,19 @@ import hre from "hardhat";
 describe("ProcessRegistry test", function () {
 
   let accounts: any;
-    let deployer: HardhatEthersSigner;
-    let user: HardhatEthersSigner;
-    let member1: HardhatEthersSigner;
-    let member2: HardhatEthersSigner;
+  let deployer: HardhatEthersSigner;
+  let user: HardhatEthersSigner;
+  let member1: HardhatEthersSigner;
+  let member2: HardhatEthersSigner;
 
-    beforeEach(async function () {
-      // Load accounts
-      accounts = await loadFixture(getTestAccounts);
-      deployer = accounts.deployer;
-      user = accounts.user;
-      member1 = accounts.member1;
-      member2 = accounts.member2;
-    });
+  beforeEach(async function () {
+    // Load accounts
+    accounts = await loadFixture(getTestAccounts);
+    deployer = accounts.deployer;
+    user = accounts.user;
+    member1 = accounts.member1;
+    member2 = accounts.member2;
+  });
 
   describe("Deployment", function () {
     it("Should deploy successfully with address discovery", async function () {

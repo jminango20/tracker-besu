@@ -64,7 +64,6 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         validChannelName(request.channelName)
         onlyChannelMember(request.channelName)
     {
-
         IAddressDiscovery addressDiscovery = IAddressDiscovery(_getAddressDiscovery());
 
         IProcessRegistry processRegistry = IProcessRegistry(
@@ -74,7 +73,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         IAssetRegistry assetRegistry = IAssetRegistry(
             addressDiscovery.getContractAddress(ASSET_REGISTRY)
         );
-        
+
         _validateRequestFields(request);
         _validateProcess(request, processRegistry);
         
@@ -82,7 +81,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             request, 
             processRegistry, 
             assetRegistry
-        );
+        );  
         
         //Get process for operation mapping
         IProcessRegistry.Process memory process = _getProcess(request, processRegistry);
@@ -181,7 +180,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
     ) private returns (bytes32[] memory affectedAssets) {
                 
         IProcessRegistry.Process memory process = _getProcess(request, processRegistry);
-        
+       
         // Route based on process action
         if (process.action == IProcessRegistry.ProcessAction.CREATE_ASSET) {
             affectedAssets = _executeCreateAsset(assetRegistry, request);
@@ -237,7 +236,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         });
         
         // Execute
-        assetRegistry.createAsset(input);
+        assetRegistry.createAsset(input, _msgSender());
         
         // Return affected assets
         affectedAssets = new bytes32[](1);

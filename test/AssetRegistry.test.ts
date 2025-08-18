@@ -21,11 +21,12 @@ import {
   LOCATION_B,
   EXTERNAL_ID_1,
   EXTERNAL_ID_2,
-  EXTERNAL_ID_3
+  EXTERNAL_ID_3,
+  TRANSACTION_ORCHESTRATOR
 } from "./utils/index";
 import hre from "hardhat";
 
-describe("AssetRegistry test", function () {
+describe.only("AssetRegistry test", function () {
 
   let accounts: any;
   let deployer: HardhatEthersSigner;
@@ -46,7 +47,7 @@ describe("AssetRegistry test", function () {
 
   describe("Deployment", function () {
     it("Should deploy successfully with address discovery", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
       
       expect(await assetRegistry.hasRole(ASSET_ADMIN_ROLE, deployer.address)).to.be.true;
       expect(await assetRegistry.getVersion()).to.equal("1.0.0");
@@ -59,10 +60,13 @@ describe("AssetRegistry test", function () {
     });
   });
 
-  describe("createAsset", function () {
+  describe.only("createAsset", function () {
     it("Should allow channel member to create asset", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
+      
       const createInput = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
@@ -72,8 +76,8 @@ describe("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1, EXTERNAL_ID_2]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
-        .not.to.be.reverted;
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
+        .not.to.be.reverted;  
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(asset.assetId).to.equal(ASSET_1);
@@ -94,7 +98,10 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetCreated event", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -105,13 +112,16 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetCreated")
         .withArgs(CHANNEL_1, ASSET_1, accounts.member1.address, DEFAULT_AMOUNT, LOCATION_A, anyValue);
     });
 
     it("Should revert if asset already exists", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -122,15 +132,18 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "AssetAlreadyExists")
         .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if assetId is zero", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: hre.ethers.ZeroHash,
@@ -141,13 +154,16 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidAssetId")
         .withArgs(CHANNEL_1, hre.ethers.ZeroHash);
     });
 
     it("Should revert if channelName is zero", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -158,13 +174,16 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "InvalidChannelName")
         .withArgs(hre.ethers.ZeroHash);
     });
 
     it("Should revert if location is empty", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -175,12 +194,15 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
     });
 
     it("Should revert if dataHashes array is empty", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -191,12 +213,15 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
     });
 
     it("Should revert if caller is not channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.user.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -207,13 +232,16 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.user).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.user).createAsset(createInput, accounts.user.address))
         .to.be.revertedWithCustomError(assetRegistry, "UnauthorizedChannelAccess")
         .withArgs(CHANNEL_1, accounts.user.address);
     });
 
     it("Should create asset with zero external IDs", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member2.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -224,7 +252,7 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await expect(assetRegistry.connect(accounts.member2).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member2).createAsset(createInput, accounts.member2.address))
         .not.to.be.reverted;
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -236,7 +264,10 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should create asset with single data hash", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -247,7 +278,7 @@ describe("AssetRegistry test", function () {
         externalIds: [EXTERNAL_ID_1]
       };
 
-      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput))
+      await expect(assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address))
         .not.to.be.reverted;
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
@@ -258,7 +289,10 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should set correct initial asset state", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
+
+      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
+      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       const createInput = {
         assetId: ASSET_1,
@@ -269,7 +303,7 @@ describe("AssetRegistry test", function () {
         externalIds: []
       };
 
-      await assetRegistry.connect(accounts.member1).createAsset(createInput);
+      await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       
@@ -289,7 +323,7 @@ describe("AssetRegistry test", function () {
 
   describe("updateAsset", function () {
     it("Should allow asset owner to update all fields", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // First create an asset
       const createInput = {
@@ -326,7 +360,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetUpdated event", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset first
       const createInput = {
@@ -355,7 +389,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should update only location when amount is zero", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -387,7 +421,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should preserve asset ownership and creation details", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -427,7 +461,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should completely replace dataHashes array", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with multiple dataHashes
       const createInput = {
@@ -458,7 +492,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset does not exist", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       const updateInput = {
         assetId: ASSET_1,
@@ -474,7 +508,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset is not active", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -513,7 +547,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not asset owner", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -542,7 +576,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -571,7 +605,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with invalid input validations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset first
       const createInput = {
@@ -624,7 +658,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should add update operation to asset history", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -659,7 +693,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle multiple consecutive updates", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -712,7 +746,7 @@ describe("AssetRegistry test", function () {
 
   describe("transferAsset", function () {
     it("Should allow asset owner to transfer to another channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -762,7 +796,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetTransferred event", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -792,7 +826,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should update owner enumeration mappings correctly", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -837,7 +871,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should preserve asset metadata and not modify amounts", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -882,7 +916,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle transfer with empty external IDs", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with external IDs
       const createInput = {
@@ -913,7 +947,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle optional location update", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -944,7 +978,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset does not exist", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       const transferInput = {
         assetId: ASSET_1,
@@ -961,7 +995,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset is not active", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1001,7 +1035,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not asset owner", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -1031,7 +1065,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if transferring to same owner", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1061,7 +1095,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -1091,7 +1125,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with invalid input validations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset first
       const createInput = {
@@ -1161,7 +1195,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if newOwner is not a channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -1191,7 +1225,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should add transfer operation to asset history", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1322,7 +1356,7 @@ describe("AssetRegistry test", function () {
 
   describe("transformAsset", function () {
     it("Should allow asset owner to transform asset with new amount", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create original asset
       const createInput = {
@@ -1382,7 +1416,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should inherit amount from original when new amount is zero", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create original asset
       const createInput = {
@@ -1416,7 +1450,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetTransformed event", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1447,7 +1481,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should inherit grouping state from original asset", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create multiple assets for grouping
       const createInput1 = {
@@ -1507,7 +1541,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should update asset status and owner enumeration correctly", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1560,7 +1594,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should add transform operations to both assets history", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1601,7 +1635,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset does not exist", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       const transformInput = {
         assetId: ASSET_1,
@@ -1618,7 +1652,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset is not active", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1658,7 +1692,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not asset owner", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -1688,7 +1722,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -1718,7 +1752,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with invalid input validations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset first
       const createInput = {
@@ -1800,7 +1834,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle transformation chains and prevent infinite depth", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create original asset
       const createInput = {
@@ -1851,7 +1885,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if transformation would exceed max depth", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         // Create original asset
         const createInput = {
@@ -1918,7 +1952,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should generate unique asset IDs for transformations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create two identical assets
       const createInput1 = {
@@ -1985,7 +2019,7 @@ describe("AssetRegistry test", function () {
 
   describe("splitAsset", function () {
     it("Should allow asset owner to split asset into multiple parts", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         // Create original asset
         const createInput = {
@@ -2041,7 +2075,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetSplit event", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         // Create and split asset
         const createInput = {
@@ -2069,7 +2103,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if amounts don't sum to original amount", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2096,7 +2130,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if amounts and dataHashes arrays have different lengths", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2122,7 +2156,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if any amount is zero", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2149,7 +2183,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should update owner and status enumerations correctly", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2192,7 +2226,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not asset owner", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2219,7 +2253,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should add split operations to asset history", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         const createInput = {
             assetId: ASSET_1,
@@ -2259,7 +2293,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle minimum split (2 parts)", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2285,7 +2319,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle maximum number of splits", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2315,7 +2349,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle large amounts correctly", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const largeAmount = hre.ethers.parseUnits("1000000", 18); // 1M tokens
         
@@ -2346,7 +2380,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with empty amounts array", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2372,7 +2406,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with single amount (meaningless split)", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2398,7 +2432,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle gas efficiently for multiple splits", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2426,7 +2460,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should generate unique asset IDs for split assets", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2461,7 +2495,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not channel member", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         // Criar asset como member1
         const createInput = {
@@ -2490,7 +2524,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should preserve asset metadata correctly in split assets", async function () {
-        const { assetRegistry } = await loadFixture(deployAssetRegistry);
+        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
         
         const createInput = {
             assetId: ASSET_1,
@@ -2530,7 +2564,7 @@ describe("AssetRegistry test", function () {
 
   describe("groupAssets", function () {
     it("Should allow owner to group multiple assets into a single group asset", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create multiple assets to group
       const createInput1 = {
@@ -2614,7 +2648,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetsGrouped event", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets
       const createInput1 = {
@@ -2654,7 +2688,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should update owner and status enumerations correctly", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create multiple assets
       const createInput1 = {
@@ -2719,7 +2753,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should add group operations to asset history", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets
       const createInput1 = {
@@ -2773,7 +2807,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if group asset ID already exists", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets
       const createInput1 = {
@@ -2812,7 +2846,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if any asset to group does not exist", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create only one asset
       const createInput = {
@@ -2842,7 +2876,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if any asset is not active", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets
       const createInput1 = {
@@ -2892,7 +2926,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if assets have different owners", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput1 = {
@@ -2933,7 +2967,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets as member1
       const createInput1 = {
@@ -2973,7 +3007,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with invalid input validations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create some assets for testing
       const createInput1 = {
@@ -3049,7 +3083,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with duplicate assets in group", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets
       const createInput1 = {
@@ -3078,7 +3112,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with self-reference in group", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets
       const createInput1 = {
@@ -3118,7 +3152,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle large number of assets efficiently", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       const numAssets = 5; // Test with 5 assets
       const assetIds: string[] = [];
@@ -3169,7 +3203,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle minimum group size (2 assets)", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create exactly 2 assets
       const createInput1 = {
@@ -3211,7 +3245,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle grouping assets with different amounts correctly", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets with different amounts
       const createInput1 = {
@@ -3264,7 +3298,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should preserve asset metadata during grouping", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets with external IDs and specific metadata
       const createInput1 = {
@@ -3335,7 +3369,7 @@ describe("AssetRegistry test", function () {
 
   describe("ungroupAssets", function () {
     it("Should allow group owner to ungroup assets and reactivate them", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create multiple assets to group
       const createInput1 = {
@@ -3426,7 +3460,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetsUngrouped event", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create and group assets
       const createInput1 = {
@@ -3475,7 +3509,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle ungroup without optional data updates", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create and group assets
       const createInput1 = {
@@ -3530,7 +3564,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should update owner and status enumerations correctly", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create multiple assets
       const createInput1 = {
@@ -3603,7 +3637,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should add ungroup operations to asset history", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create and group assets
       const createInput1 = {
@@ -3669,7 +3703,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if group asset does not exist", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       const ungroupInput = {
         assetId: ASSET_1,
@@ -3684,7 +3718,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if group asset is not active", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create and group assets
       const createInput1 = {
@@ -3743,7 +3777,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not group asset owner", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets with member1
       const createInput1 = {
@@ -3793,7 +3827,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create and group assets
       const createInput1 = {
@@ -3842,7 +3876,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset is not a group (has no grouped assets)", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create a regular asset (not a group)
       const createInput = {
@@ -3870,7 +3904,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset was already ungrouped", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create and group assets
       const createInput1 = {
@@ -3921,7 +3955,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with invalid input validations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Test invalid assetId
       const ungroupInput = {
@@ -3949,7 +3983,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle large groups efficiently", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create multiple assets (up to MAX_GROUP_SIZE)
       const assetIds = [];
@@ -4011,7 +4045,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should preserve asset metadata correctly after ungroup", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with metadata
       const createInput = {
@@ -4078,7 +4112,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle consecutive group and ungroup operations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create assets
       const createInput1 = {
@@ -4170,7 +4204,7 @@ describe("AssetRegistry test", function () {
 
   describe("inactivateAsset", function () {
     it("Should allow asset owner to inactivate asset with final location and data", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4227,7 +4261,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should emit AssetInactivated event", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4255,7 +4289,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should allow inactivation with only final location (no dataHash)", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4288,7 +4322,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should allow inactivation with only final dataHash (no location)", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4320,7 +4354,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should allow inactivation without any final updates", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4358,7 +4392,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should update owner and status enumerations correctly", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create multiple assets
       const createInput1 = {
@@ -4417,7 +4451,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should add inactivate operation to asset history", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4451,7 +4485,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset does not exist", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       const inactivateInput = {
         assetId: ASSET_1,
@@ -4466,7 +4500,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if asset is already inactive", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4497,7 +4531,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not asset owner", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with member1
       const createInput = {
@@ -4525,7 +4559,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert if caller is not channel member", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset
       const createInput = {
@@ -4553,7 +4587,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should revert with invalid input validations", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset first
       const createInput = {
@@ -4593,7 +4627,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle inactivation of previously transformed asset", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create original asset
       const createInput = {
@@ -4647,7 +4681,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle inactivation of previously split assets", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset to split
       const createInput = {
@@ -4707,7 +4741,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should handle large data replacement efficiently", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create asset with multiple data hashes
       const originalHashes = [DATA_HASH_1, DATA_HASH_2, DATA_HASH_3, DATA_HASH_4];
@@ -4740,7 +4774,7 @@ describe("AssetRegistry test", function () {
     });
 
     it("Should preserve asset relationships after inactivation", async function () {
-      const { assetRegistry } = await loadFixture(deployAssetRegistry);
+      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
       // Create and group assets
       const createInput1 = {

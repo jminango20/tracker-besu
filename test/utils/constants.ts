@@ -12,6 +12,8 @@ export const CONTRACT_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONTRACT_
 export const CONTRACT_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CONTRACT_2"));
 export const NON_EXISTENT_CONTRACT = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NON_EXISTENT_CONTRACT"));
 
+export const TRANSACTION_ORCHESTRATOR = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TRANSACTION_ORCHESTRATOR"));
+
 export const contractAddress1 = hre.ethers.Wallet.createRandom().address;
 export const contractAddress2 = hre.ethers.Wallet.createRandom().address;
 
@@ -54,7 +56,6 @@ export const NATURE_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("NATURE_2"))
 export const STAGE_1 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("STAGE_1"));
 export const STAGE_2 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("STAGE_2"));
 
-
 /**
  * ASSET REGISTRY
  */
@@ -88,3 +89,52 @@ export const DATA_HASH_4 = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("data_has
 export const EXTERNAL_ID_1 = "EXT-001";
 export const EXTERNAL_ID_2 = "EXT-002";
 export const EXTERNAL_ID_3 = "EXT-003";
+
+/**
+ * TRANSACTION ORCHESTRATOR 
+ */
+export const TRANSACTION_ADMIN_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TRANSACTION_ADMIN_ROLE"));
+
+// Agricultural specific constants for testing
+export const CATTLE_TAG_1 = "CATTLE-001";
+export const CATTLE_TAG_2 = "CATTLE-002";
+export const RFID_1 = "RFID-123456789";
+export const RFID_2 = "RFID-987654321";
+
+// Farm locations
+export const FARM_SECTOR_A1 = "Farm-Sector-A1";
+export const FARM_SECTOR_A2 = "Farm-Sector-A2";
+export const FARM_SECTOR_B1 = "Farm-Sector-B1";
+export const DAIRY_TANK_1 = "Dairy-Tank-1";
+export const DAIRY_TANK_2 = "Dairy-Tank-2";
+export const SILO_A = "Silo-A";
+export const SILO_B = "Silo-B";
+
+// Agricultural process types
+export const CATTLE_REGISTRATION = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CATTLE_REGISTRATION"));
+export const MILK_PRODUCTION = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("MILK_PRODUCTION"));
+export const GRAIN_STORAGE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GRAIN_STORAGE"));
+export const ORGANIC_CERTIFICATION = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ORGANIC_CERTIFICATION"));
+
+// Agricultural nature types  
+export const LIVESTOCK = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("LIVESTOCK"));
+export const DAIRY = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("DAIRY"));
+export const SOYBEAN = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("SOYBEAN"));
+export const CORN = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CORN"));
+export const ORGANIC = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ORGANIC"));
+
+// Agricultural stage types
+export const REGISTRATION = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("REGISTRATION"));
+export const COLLECTION = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("COLLECTION"));
+export const HARVEST = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("HARVEST"));
+export const CERTIFICATION = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("CERTIFICATION"));
+export const PROCESSING = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PROCESSING"));
+export const STORAGE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("STORAGE"));
+
+// Batch identifiers for agricultural products
+export const BATCH_MILK_001 = "BATCH-MILK-001";
+export const BATCH_SOY_001 = "BATCH-SOY-001";
+export const BATCH_SOY_002 = "BATCH-SOY-002";
+export const HARVEST_2024_CORN_001 = "HARVEST-2024-CORN-001";
+export const GPS_COORD_12345 = "GPS-COORD-12345";
+export const QUALITY_CERT_ABC123 = "QUALITY-CERT-ABC123";

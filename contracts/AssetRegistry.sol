@@ -8,6 +8,7 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {
     DEFAULT_ADMIN_ROLE,
     PROCESS_REGISTRY,
+    TRANSACTION_ORCHESTRATOR,
     MAX_PAGE_SIZE,
     FIRST_PAGE,
     INVALID_PAGE,
@@ -92,6 +93,14 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
      */
     mapping(bytes32 => mapping(bytes32 => bytes32[])) private _childAssetsByChannel;
 
+    modifier onlyTransactionOrchestrator() {
+        address orchestratorAddress = _getAddressDiscovery().getContractAddress(TRANSACTION_ORCHESTRATOR);
+        if (_msgSender() != orchestratorAddress) {
+            revert OnlyTransactionOrchestrator();
+        }
+        _;
+    }
+
 
 
     // =============================================================
@@ -115,11 +124,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     /**
      * @inheritdoc IAssetRegistry
      */
-    function createAsset(CreateAssetInput calldata input) 
+    function createAsset(CreateAssetInput calldata input, address originCaller) 
         external
         nonReentrant
         validChannelName(input.channelName)
-        onlyChannelMember(input.channelName)
+        onlyTransactionOrchestrator()
+        onlyChannelMemberAddress(input.channelName, originCaller)
     {
         _validateCreateAssetInput(input);
 
@@ -130,14 +140,14 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         // Create asset structure
         Asset storage newAsset = _assetsByChannel[input.channelName][input.assetId];
         newAsset.assetId = input.assetId;
-        newAsset.owner = _msgSender();
+        newAsset.owner = originCaller;
         newAsset.idLocal = input.idLocal;
         newAsset.amount = input.amount;
         newAsset.status = AssetStatus.ACTIVE;
         newAsset.operation = AssetOperation.CREATE;
         newAsset.createdAt = Utils.timestamp();
         newAsset.lastUpdated = Utils.timestamp();
-        newAsset.originOwner = _msgSender();
+        newAsset.originOwner = originCaller;
 
         for (uint256 i = 0; i < input.dataHashes.length; i++) { //See TODO
             newAsset.dataHashes.push(input.dataHashes[i]);
@@ -150,14 +160,14 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         // Mark asset as existing
         _assetExistsByChannel[input.channelName][input.assetId] = true;
 
-        _addAssetToOwner(input.channelName, input.assetId, _msgSender());
+        _addAssetToOwner(input.channelName, input.assetId, originCaller);
         _addAssetToStatus(input.channelName, input.assetId, AssetStatus.ACTIVE);
         _addToHistory(input.channelName, input.assetId, AssetOperation.CREATE, Utils.timestamp());
 
         emit AssetCreated(
             input.channelName,
             input.assetId,
-            _msgSender(),
+            originCaller,
             input.amount,
             input.idLocal,
             Utils.timestamp()
