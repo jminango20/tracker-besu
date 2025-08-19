@@ -12,15 +12,15 @@ interface IProcessRegistry {
     // =============================================================
 
     enum ProcessAction {
-        CREATE_ASSET,
-        UPDATE_ASSET,
-        TRANSFER_ASSET,
-        SPLIT_ASSET,
-        GROUP_ASSET,
-        UNGROUP_ASSET,
-        TRANSFORM_ASSET,
-        INACTIVATE_ASSET,
-        CREATE_DOCUMENT
+        CREATE_ASSET,       //0
+        UPDATE_ASSET,       //1
+        TRANSFER_ASSET,     //2
+        SPLIT_ASSET,        //3
+        GROUP_ASSET,        //4
+        UNGROUP_ASSET,      //5
+        TRANSFORM_ASSET,    //6
+        INACTIVATE_ASSET,   //7
+        CREATE_DOCUMENT     //8
     }
 
     enum ProcessStatus {

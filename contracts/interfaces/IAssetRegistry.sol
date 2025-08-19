@@ -17,18 +17,18 @@ interface IAssetRegistry {
     }
     
     enum AssetOperation { 
-        CREATE,      // Initial asset creation
-        UPDATE,    // Register asset
-        TRANSFER,    // Transfer ownership
-        TRANSFERIN,  // Transfer inner
-        SPLIT,       // Split into multiple assets
-        GROUP,       // Group multiple assets into one
-        UNGROUP,     // Ungroup assets back to originals
-        TRANSFORM,   // Transform to new asset type
-        INACTIVATE,  // Permanently inactivate asset
-        CREATE_DOCUMENT, //Create document
-        DATA_SHEET_ASSET, //Data sheet
-        PARTIALLY_CONSUMED_ASSET //Partially consumed
+        CREATE,      // Initial asset creation - 0
+        UPDATE,      // Register asset - 1
+        TRANSFER,    // Transfer ownership - 2
+        TRANSFERIN,  // Transfer inner - 3
+        SPLIT,       // Split into multiple assets - 4
+        GROUP,       // Group multiple assets into one - 5
+        UNGROUP,     // Ungroup assets back to originals - 6
+        TRANSFORM,   // Transform to new asset type - 7
+        INACTIVATE,  // Permanently inactivate asset - 8
+        CREATE_DOCUMENT, //Create document - 9
+        DATA_SHEET_ASSET, //Data sheet - 10
+        PARTIALLY_CONSUMED_ASSET //Partially consumed - 11
     }
 
     // =============================================================
