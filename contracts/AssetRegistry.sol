@@ -165,6 +165,15 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         _addAssetToStatus(input.channelName, input.assetId, AssetStatus.ACTIVE);
         _addToHistory(input.channelName, input.assetId, AssetOperation.CREATE, Utils.timestamp());
 
+        // Para assets criados (origem), emitir evento de profundidade 0
+        bytes32[] memory emptyOrigins = new bytes32[](0);
+        _emitDepthCalculation(
+            input.channelName,
+            input.assetId,
+            0,                       // depth 0 = origin
+            emptyOrigins            // no origins (this IS the origin)
+        );
+
         emit AssetCreated(
             input.channelName,
             input.assetId,
@@ -217,6 +226,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         asset.lastUpdated = Utils.timestamp();
 
         _addToHistory(update.channelName, update.assetId, AssetOperation.UPDATE, Utils.timestamp());
+
+        _emitLineage(
+            update.channelName,
+            update.assetId,          // child (updated asset)
+            update.assetId,          // parent (original asset state)
+            RelationshipType.UPDATE
+        );
 
         emit AssetUpdated(
             update.channelName,
@@ -278,6 +294,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         _addAssetToOwner(transfer.channelName, transfer.assetId, transfer.newOwner);
 
         _addToHistory(transfer.channelName, transfer.assetId, AssetOperation.TRANSFER, Utils.timestamp());
+
+        _emitLineage(
+            transfer.channelName,
+            transfer.assetId,        // child (same asset, new ownership)
+            transfer.assetId,        // parent (same asset, old ownership)  
+            RelationshipType.TRANSFER
+        );
 
         emit AssetTransferred(
             transfer.channelName,
@@ -360,6 +383,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         //3.1 Novos campos de transformação do novo asset
         newAsset.parentAssetId = transform.assetId;
         newAsset.transformationId = transform.transformationId;
+
+        _emitLineage(
+            transform.channelName,
+            newAssetId,              // child (transformed asset)
+            transform.assetId,       // parent (original asset)
+            RelationshipType.TRANSFORM
+        );
         
         // Copiar dataHashes
         for (uint256 i = 0; i < transform.dataHashes.length; i++) {
@@ -488,6 +518,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             _addToHistory(split.channelName, newAssetId, AssetOperation.SPLIT, Utils.timestamp());
             
             newAssetIds[i] = newAssetId;
+
+            _emitLineage(
+                split.channelName,
+                newAssetId,                 // child (new split asset)
+                split.assetId,             // parent (original asset) 
+                RelationshipType.SPLIT
+            );
         }
 
         //4. Atualizar Rastreabilidade
@@ -495,6 +532,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         
         //5. Adicionar child assets no original
         originalAsset.childAssets = newAssetIds;
+
+        _emitRelationship(
+            split.channelName,
+            split.assetId,           // primary (original asset)
+            newAssetIds,             // related (all split assets)
+            AssetOperation.SPLIT
+        );
         
         emit AssetSplit(
             split.assetId,
@@ -549,6 +593,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         //2.1 Relacionar assets no grupo
         for (uint256 i = 0; i < group.assetIds.length; i++) {
             groupAsset.groupedAssets.push(group.assetIds[i]);  // REVERSE TRACKING
+
+            _emitLineage(
+                group.channelName,
+                group.groupAssetId,      // child (group asset)
+                group.assetIds[i],       // parent (component asset)
+                RelationshipType.GROUP_COMPONENT
+            );
         }
 
         groupAsset.groupedBy = bytes32(0);                // Grupo não está agrupado em outro (inicialmente)
@@ -569,6 +620,26 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         _addAssetToOwner(group.channelName, group.groupAssetId, originCaller);
         _addAssetToStatus(group.channelName, group.groupAssetId, AssetStatus.ACTIVE);
         _addToHistory(group.channelName, group.groupAssetId, AssetOperation.GROUP, Utils.timestamp());
+
+        _emitRelationship(
+            group.channelName,
+            group.groupAssetId,      // primary (group asset)
+            group.assetIds,          // related (component assets)
+            AssetOperation.GROUP
+        );
+
+        uint256[] memory componentAmounts = new uint256[](group.assetIds.length);
+        for (uint256 i = 0; i < group.assetIds.length; i++) {
+            Asset storage componentAsset = _assetsByChannel[group.channelName][group.assetIds[i]];
+            componentAmounts[i] = componentAsset.amount;
+        }
+        
+        _emitComposition(
+            group.channelName,
+            group.groupAssetId,
+            group.assetIds,
+            componentAmounts
+        );
 
         emit AssetsGrouped(
             group.assetIds,
@@ -1185,6 +1256,68 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         return depth;
     }
 
+    // =============================================================
+    //                    INTERNAL EVENT EMITTER FUNCTIONS
+    // =============================================================
+    
+    function _emitLineage(
+        bytes32 channelName,
+        bytes32 childId,
+        bytes32 parentId,
+        RelationshipType relType
+    ) internal {
+        emit AssetLineage(
+            channelName,
+            childId,
+            parentId,
+            uint8(relType),
+            Utils.timestamp()
+        );
+    }
+
+    function _emitRelationship(
+        bytes32 channelName,
+        bytes32 primaryId,
+        bytes32[] memory relatedIds,
+        AssetOperation operationType
+    ) internal {
+        emit AssetRelationship(
+            channelName,
+            primaryId,
+            relatedIds,
+            uint8(operationType),
+            block.number
+        );
+    }
+    
+    function _emitComposition(
+        bytes32 channelName,
+        bytes32 assetId,
+        bytes32[] memory components,
+        uint256[] memory amounts
+    ) internal {
+        emit AssetComposition(
+            channelName,
+            assetId,
+            components,
+            amounts,
+            Utils.timestamp()
+        );
+    }
+
+    function _emitDepthCalculation(
+        bytes32 channelName,
+        bytes32 assetId,
+        uint8 depth,
+        bytes32[] memory origins
+    ) internal {
+        emit AssetDepthCalculated(
+            channelName,
+            assetId,
+            depth,
+            origins
+        );
+    }
 
     // =============================================================
     //                    ADMIN FUNCTIONS

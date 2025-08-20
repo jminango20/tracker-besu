@@ -150,6 +150,48 @@ interface IAssetRegistry {
     }
 
     // =============================================================
+    //                    RELATIONSHIP TYPES
+    // =============================================================
+
+    /**
+     * @notice Enumeration of asset relationship types for lineage tracking
+     */
+    enum RelationshipType {
+        SPLIT,           // Child came from splitting parent
+        TRANSFORM,       // Child is transformation of parent
+        GROUP_COMPONENT, // Child is component of a group (parent is group)
+        TRANSFER,        // Asset was transferred (ownership change)
+        UPDATE           // Asset was updated (metadata change)
+    }
+
+    // =============================================================
+    //                    LINEAGE STRUCTURES
+    // =============================================================
+
+    /**
+    * @notice Structure to represent asset lineage information
+    */
+    struct LineageNode {
+        bytes32 assetId;
+        bytes32[] parents;
+        bytes32[] children;
+        uint8 depth;
+        RelationshipType relationshipType;
+        uint256 timestamp;
+    }
+
+    /**
+    * @notice Structure for complex asset composition tracking
+    */
+    struct AssetCompositionData {
+        bytes32[] componentAssets;
+        uint256[] componentAmounts;
+        uint256[] componentPercentages;
+        uint256 lastUpdated;
+        bool isActive;
+    }
+
+    // =============================================================
     //                        EVENTS
     // =============================================================
 
@@ -240,6 +282,72 @@ interface IAssetRegistry {
         address indexed owner,
         AssetOperation lastOperation,
         uint256 timestamp
+    );
+
+    // =============================================================
+    //                    ENHANCED EVENTS
+    // =============================================================
+
+    /**
+     * @notice Emitted when a parent-child relationship is established between assets
+     * @param channelName The channel where the assets exist
+     * @param childAssetId The ID of the child asset
+     * @param parentAssetId The ID of the parent asset
+     * @param relationshipType Type of relationship: 0=SPLIT, 1=TRANSFORM, 2=GROUP_COMPONENT
+     * @param timestamp When the relationship was established
+     */
+    event AssetLineage(
+        bytes32 indexed channelName,
+        bytes32 indexed childAssetId,
+        bytes32 indexed parentAssetId,
+        uint8 relationshipType,
+        uint256 timestamp
+    );
+
+    /**
+     * @notice Emitted when multiple assets are related in a single operation
+     * @param channelName The channel where the operation occurred
+     * @param primaryAssetId The main asset involved (e.g., group asset or split origin)
+     * @param relatedAssets Array of related asset IDs
+     * @param operationType The operation type that created this relationship
+     * @param blockNumber Block when the relationship was created
+     */
+    event AssetRelationship(
+        bytes32 indexed channelName,
+        bytes32 indexed primaryAssetId,
+        bytes32[] relatedAssets,
+        uint8 operationType,
+        uint256 blockNumber
+    );
+
+    /**
+     * @notice Emitted when an asset's composition changes (for complex blends)
+     * @param channelName The channel where the asset exists
+     * @param assetId The asset whose composition changed
+     * @param componentAssets Array of component asset IDs
+     * @param componentAmounts Array of amounts for each component
+     * @param timestamp When the composition was recorded
+     */
+    event AssetComposition(
+        bytes32 indexed channelName,
+        bytes32 indexed assetId,
+        bytes32[] componentAssets,
+        uint256[] componentAmounts,
+        uint256 timestamp
+    );
+
+    /**
+     * @notice Emitted when an asset reaches a specific depth in the transformation chain
+     * @param channelName The channel where the asset exists
+     * @param assetId The asset ID
+     * @param depth The depth level (0 = origin, 1+ = transformations)
+     * @param originAssets Array of origin asset IDs that this asset traces back to
+     */
+    event AssetDepthCalculated(
+        bytes32 indexed channelName,
+        bytes32 indexed assetId,
+        uint8 depth,
+        bytes32[] originAssets
     );
 
     
