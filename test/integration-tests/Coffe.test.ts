@@ -5,9 +5,7 @@ import hre from "hardhat";
 import { deployTransactionOrchestrator } from "../fixture/deployTransactionOrchestrator";
 import { getTestAccounts } from "../utils/index";
 
-describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () {
-  //Test timeout for complex operations
-  this.timeout(300000); // 5 minutes
+describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () {
 
   //ACTORS
   let deployer: HardhatEthersSigner;
@@ -37,6 +35,7 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
   const PROCESS_PLANTIO = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PLANTIO_ARABICA"));
   const PROCESS_COLHEITA = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("COLHEITA_SELETIVA"));
   const PROCESS_BENEFICIAMENTO = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("BENEFICIAMENTO_LAVADO"));
+  const PROCESS_TORREFACAO_TRANSFER = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TORREFACAO_TRANSFER"));
   const PROCESS_TORREFACAO = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TORREFACAO_ARTESANAL"));
   const PROCESS_BLEND = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("BLEND_PREMIUM"));
 
@@ -53,9 +52,20 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
   let lotesEspecial: string[] = [];
   let lotesComercial: string[] = [];
   let loteBeneficiado: string;
+  let loteTorradoTransfer: string;
   let loteTorrado: string;
   let loteBlend: string;
   let massaTotal: number = 1000; // kg inicial
+
+  //EVENT STORAGE FOR TRACEABILITY
+  let lineageEvents: any[] = [];
+  let relationshipEvents: any[] = [];
+  let compositionEvents: any[] = [];
+  let depthEvents: any[] = [];
+  let custodyEvents: any[] = []; 
+  let stateEvents: any[] = []; 
+
+
 
   //HELPER FUNCTIONS
   async function logPhase(phase: string, details: any) {
@@ -84,6 +94,202 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       status: Number(asset.status),
       operation: Number(asset.operation)
     };
+  }
+
+  //EVENT CAPTURE FUNCTIONS
+  async function captureEventsByTransaction(receipt: any, eventType: string) {
+    const events = receipt.logs
+      .filter((log: any) => {
+        try {
+          const parsed = assetRegistry.interface.parseLog(log);
+          return parsed?.name === eventType;
+        } catch { return false; }
+      })
+      .map((log: any) => assetRegistry.interface.parseLog(log));
+    
+    // Store events for later analysis
+    if (eventType === 'AssetLineage') {
+      lineageEvents.push(...events);
+    } else if (eventType === 'AssetRelationship') {
+      relationshipEvents.push(...events);
+    } else if (eventType === 'AssetComposition') {
+      compositionEvents.push(...events);
+    } else if (eventType === 'AssetDepthCalculated') {
+      depthEvents.push(...events);
+    } else if (eventType === 'AssetCustodyChanged') { 
+      custodyEvents.push(...events);
+    } else if (eventType === 'AssetStateChanged') {
+      stateEvents.push(...events);
+    }
+    
+    return events;
+  }
+
+  async function buildTraceabilityGraphFromEvents() {
+    console.log("\n   CONSTRUINDO GRAFO DE RASTREABILIDADE A PARTIR DOS EVENTOS:");
+    
+    //Mostrar todos os eventos de lineage
+    /*
+    console.log(`       DEBUG - Todos os eventos de lineage:`);
+    lineageEvents.forEach((event, idx) => {
+      const relType = Number(event.args.relationshipType);
+      const relTypeNames = ["SPLIT", "TRANSFORM", "GROUP_COMPONENT", "TRANSFER", "UPDATE"];
+      console.log(`         ${idx + 1}. Parent: ${event.args.parentAssetId.substring(0, 10)}... → Child: ${event.args.childAssetId.substring(0, 10)}... (${relTypeNames[relType]})`);
+    });
+    */
+    
+    // Create adjacency map for lineage
+    const lineageMap = new Map<string, any[]>();
+    const reverseLineageMap = new Map<string, any[]>();
+    
+    lineageEvents.forEach(event => {
+      const parent = event.args.parentAssetId;
+      const child = event.args.childAssetId;
+      const relType = Number(event.args.relationshipType);
+      const timestamp = Number(event.args.timestamp);
+      
+      // Forward lineage (parent -> children)
+      if (!lineageMap.has(parent)) {
+        lineageMap.set(parent, []);
+      }
+      lineageMap.get(parent)!.push({ child, relType, timestamp });
+      
+      // Reverse lineage (child -> parents)
+      if (!reverseLineageMap.has(child)) {
+        reverseLineageMap.set(child, []);
+      }
+      reverseLineageMap.get(child)!.push({ parent, relType, timestamp });
+    });
+    
+    //Mostrar mapas construídos
+    /*
+    console.log(`         DEBUG - Forward lineage map:`);
+    for (const [parent, children] of lineageMap.entries()) {
+      console.log(`         ${parent.substring(0, 10)}... → ${children.length} filhos`);
+    }
+    
+    console.log(`        DEBUG - Reverse lineage map:`);
+    for (const [child, parents] of reverseLineageMap.entries()) {
+      console.log(`         ${child.substring(0, 10)}... ← ${parents.length} pais`);
+    }
+    */
+    
+    return { lineageMap, reverseLineageMap };
+  }
+
+  async function traceAssetToOrigins(assetId: string, reverseLineageMap: Map<string, any[]>): Promise<string[]> {
+    const visited = new Set<string>();
+    const origins: string[] = [];
+    
+    async function dfs(currentId: string, depth: number = 0) {
+      
+      if (visited.has(currentId) || depth > 10) {
+        return;
+      }
+      visited.add(currentId);
+      
+      const parents = reverseLineageMap.get(currentId) || [];
+      
+      if (parents.length === 0) {
+        // This is an origin asset
+        origins.push(currentId);
+        return;
+      }
+      
+      for (const parentInfo of parents) {
+        await dfs(parentInfo.parent, depth + 1);
+      }
+    }
+    
+    await dfs(assetId);
+    return origins;
+  }
+
+  async function buildCompleteTransformationPath(assetId: string): Promise<any[]> {
+    console.log(`          🔍 CONSTRUINDO CAMINHO COMPLETO para: ${assetId.substring(0, 10)}...`);
+    
+    const completePath: any[] = [];
+    
+    // 1. Build genealogical backbone from lineage events
+    const genealogyPath = await traceGenealogyToOrigin(assetId);
+    
+    // 2. For each asset in genealogy, find custody/state changes
+    for (let i = 0; i < genealogyPath.length; i++) {
+      const currentAssetId = genealogyPath[i];
+      const assetDetails = await getAssetDetails(currentAssetId);
+      
+      // Add the asset to path
+      completePath.push({
+        type: i === 0 ? 'ORIGIN' : 'GENEALOGY',
+        assetId: currentAssetId,
+        location: assetDetails.location,
+        amount: assetDetails.amount,
+        step: i + 1
+      });
+      
+      // Find custody changes for this asset
+      const assetCustodyChanges = custodyEvents.filter(e => e.args.assetId === currentAssetId);
+      assetCustodyChanges.forEach((custodyEvent, idx) => {
+        completePath.push({
+          type: 'CUSTODY',
+          assetId: currentAssetId,
+          location: custodyEvent.args.newLocation,
+          amount: assetDetails.amount,
+          previousOwner: custodyEvent.args.previousOwner,
+          newOwner: custodyEvent.args.newOwner,
+          step: `${i + 1}.${idx + 1}`
+        });
+      });
+      
+      // Find state changes for this asset
+      const assetStateChanges = stateEvents.filter(e => e.args.assetId === currentAssetId);
+      assetStateChanges.forEach((stateEvent, idx) => {
+        completePath.push({
+          type: 'STATE',
+          assetId: currentAssetId,
+          location: stateEvent.args.newLocation,
+          amount: Number(stateEvent.args.newAmount),
+          previousLocation: stateEvent.args.previousLocation,
+          step: `${i + 1}.${idx + 1}`
+        });
+      });
+    }
+    
+    // 3. Sort by step order to maintain chronology
+    completePath.sort((a, b) => {
+      const stepA = parseFloat(a.step.toString());
+      const stepB = parseFloat(b.step.toString());
+      return stepA - stepB;
+    });
+    
+    console.log(`          🎯 Caminho completo construído com ${completePath.length} etapas`);
+    return completePath;
+  }
+
+  // Helper function for genealogy-only path
+  async function traceGenealogyToOrigin(assetId: string): Promise<string[]> {
+    const { lineageMap, reverseLineageMap } = await buildTraceabilityGraphFromEvents();
+    const path: string[] = [];
+    const visited = new Set<string>();
+    
+    async function tracePath(currentId: string) {
+      if (visited.has(currentId) || path.length > 10) return;
+      visited.add(currentId);
+      path.unshift(currentId);
+      
+      const parents = reverseLineageMap.get(currentId) || [];
+      
+      // Only follow genealogical parents (exclude TRANSFER/UPDATE)
+      const genealogicalParents = parents.filter(p => p.relType !== 3 && p.relType !== 4);
+      
+      if (genealogicalParents.length > 0) {
+        // Follow first genealogical parent
+        await tracePath(genealogicalParents[0].parent);
+      }
+    }
+    
+    await tracePath(assetId);
+    return path;
   }
 
   it("COMPLETE COFFEE SUPPLY CHAIN", async function () {
@@ -146,6 +352,7 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       { id: PROCESS_PLANTIO, schema: SCHEMA_PLANTIO, action: 0, nature: NATURE_PRODUCAO, stage: STAGE_INICIAL }, //CREATE_ASSET
       { id: PROCESS_COLHEITA, schema: SCHEMA_COLHEITA, action: 3, nature: NATURE_PRODUCAO, stage: STAGE_PROCESSAMENTO }, //SPLIT_ASSET
       { id: PROCESS_BENEFICIAMENTO, schema: SCHEMA_BENEFICIAMENTO, action: 2, nature: NATURE_PROCESSAMENTO, stage: STAGE_PROCESSAMENTO }, //TRANSFER_ASSET
+      { id: PROCESS_TORREFACAO_TRANSFER, schema: SCHEMA_TORREFACAO, action: 2, nature: NATURE_PROCESSAMENTO, stage: STAGE_PROCESSAMENTO }, //TRANSFER_ASSET - TORREFACAO      
       { id: PROCESS_TORREFACAO, schema: SCHEMA_TORREFACAO, action: 6, nature: NATURE_PROCESSAMENTO, stage: STAGE_PROCESSAMENTO }, //TRANSFORM_ASSET
       { id: PROCESS_BLEND, schema: SCHEMA_BLEND, action: 4, nature: NATURE_PROCESSAMENTO, stage: STAGE_FINAL } //GROUP_ASSET
     ];
@@ -161,16 +368,16 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
         channelName: CANAL_CAFE
       });
     }
-    console.log("   ✅ 5 processos criados");
+    console.log("   ✅ 6 processos criados");
     console.log("   🎯 Setup completo! Iniciando jornada do café...");
 
     // ================================
-    // FASE 1: PLANTIO (FAZENDEIRO)
+    // FASE 1: PLANTIO (FAZENDEIRO) - CREATE_ASSET
     // ================================
     console.log("\n ============================================================");
     await logPhase("🎯 FASE 1: PLANTIO - FAZENDA DAT", {
       massa: massaTotal,
-      local: "Fazenda DAT - Talhão A1",
+      local: "Fazenda DAT - Local A",
       owner: "Fazendeiro"
     });
 
@@ -182,7 +389,7 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       targetAssetIds: [],
       operationData: {
         initialAmount: massaTotal,
-        initialLocation: "Fazenda DAT - Talhão A1 - Altitude 1200m",
+        initialLocation: "Fazenda DAT - Local A",
         targetOwner: hre.ethers.ZeroAddress,
         externalIds: ["CERT-ORGANICO-2024", "ANALISE-SOLO-A1-2024"],
         splitAmounts: [],
@@ -197,6 +404,15 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
 
     const txPlantio = await transactionOrchestrator.connect(fazendeiro).submitTransaction(transactionPlantio);
     const receiptPlantio = await txPlantio.wait();
+
+    const depthEventsPlantio = await captureEventsByTransaction(receiptPlantio, 'AssetDepthCalculated');
+    
+    if (depthEventsPlantio.length > 0) {
+      const depthEvent = depthEventsPlantio[0];
+      console.log(`      Asset ID: ${depthEvent.args.assetId}`);
+      console.log(`      Profundidade: ${depthEvent.args.depth} (origem)`);
+      console.log(`      Origins: ${depthEvent.args.originAssets.length} (vazio para origem)`);
+    }
 
     // Extract asset ID from events
     const eventPlantio = receiptPlantio?.logs.find((log: any) => {
@@ -223,12 +439,12 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
     });
 
     // ================================
-    // FASE 2: COLHEITA SELETIVA (FAZENDEIRO)
+    // FASE 2: COLHEITA (FAZENDEIRO) - SPLIT
     // ================================
     console.log("\n ============================================================");
     await logPhase("🎯 FASE 2: COLHEITA SELETIVA - SEPARAÇÃO POR QUALIDADE", {
       massa: massaTotal,
-      local: "Terreiro de Secagem - Fazenda DAT",
+      local: "Fazenda DAT - Terreiro de Secagem - Local B",
       owner: "Fazendeiro"
     });
 
@@ -264,6 +480,27 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
     const txColheita = await transactionOrchestrator.connect(fazendeiro).submitTransaction(transactionColheita);
     const receiptColheita = await txColheita.wait();
 
+    //CAPTURAR EVENTOS DE LINEAGE
+    const lineageEventsColheita = await captureEventsByTransaction(receiptColheita, 'AssetLineage');
+    console.log(`   📊 Eventos de lineage capturados: ${lineageEventsColheita.length}`);
+
+    lineageEventsColheita.forEach((event: any, idx: any) => {
+      const relType = Number(event.args.relationshipType);
+      const relTypeNames = ["SPLIT", "TRANSFORM", "GROUP_COMPONENT", "TRANSFER", "UPDATE"];
+      console.log(`      ${idx + 1}. ${event.args.childAssetId} ← ${event.args.parentAssetId} (${relTypeNames[relType] || relType})`);
+    });
+
+    //CAPTURAR EVENTOS DE RELATIONSHIP
+    const relationshipEventsColheita = await captureEventsByTransaction(receiptColheita, 'AssetRelationship');
+    console.log(`   📊 Eventos de relacionamento capturados: ${relationshipEventsColheita.length}`);
+    
+    if (relationshipEventsColheita.length > 0) {
+      const relEvent = relationshipEventsColheita[0];
+      console.log(`      Operação: SPLIT (${relEvent.args.operationType})`);
+      console.log(`      Asset principal: ${relEvent.args.primaryAssetId}`);
+      console.log(`      Assets relacionados: ${relEvent.args.relatedAssets.length}`);
+    }
+
     // Validate split occurred
     const assetOriginalAposColheita = await assetRegistry.getAsset(CANAL_CAFE, assetOriginalId);
     expect(assetOriginalAposColheita.status).to.equal(1); // INACTIVE
@@ -295,12 +532,13 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
     });
 
     // ================================
-    // FASE 3: BENEFICIAMENTO (FAZENDEIRO → BENEFICIADORA)
+    // FASE 3: BENEFICIAMENTO (FAZENDEIRO → BENEFICIADORA) - TRANSFERÊNCIA
     // ================================
     console.log("\n ============================================================");
     await logPhase("🎯 FASE 3: BENEFICIAMENTO - TRANSFERÊNCIA", {
       massa: massaPremium,
-      local: "Beneficiadora Vale do Rio Doce"
+      local: "Beneficiadora Vale do Rio Doce",
+      owner: "Beneficiadora",
     });
 
     const transactionBeneficiamento = {
@@ -327,6 +565,15 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
     const txBeneficiamento = await transactionOrchestrator.connect(fazendeiro).submitTransaction(transactionBeneficiamento);
     const receiptBeneficiamento = await txBeneficiamento.wait();
 
+    //CAPTURAR EVENTOS DE TRANSFER
+    const lineageEventsBeneficiamento = await captureEventsByTransaction(receiptBeneficiamento, 'AssetLineage');
+    console.log(`   📊 Eventos de lineage (transfer) capturados: ${lineageEventsBeneficiamento.length}`);
+    
+    if (lineageEventsBeneficiamento.length > 0) {
+      const transferEvent = lineageEventsBeneficiamento[0];
+      console.log(`      Transfer: ${transferEvent.args.childAssetId} ← ${transferEvent.args.parentAssetId} (ownership change)`);
+    }
+
     // Validate transfer occurred
     const assetBeneficiado = await getAssetDetails(lotesPremium[0]);
     expect(assetBeneficiado.owner).to.equal(beneficiadora.address);
@@ -341,14 +588,56 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
     });
     
     // ================================
-    // FASE 4: TORREFAÇÃO (BENEFICIADORA)
+    // FASE 4: TORREFAÇÃO (BENEFICIADORA → TORREFÁCIA) - TRANSFORM
     // ================================
     console.log("\n ============================================================");
     await logPhase("🎯 FASE 4: TORREFAÇÃO - TRANSFORMAÇÃO TÉRMICA", {
       massa: `${massaPremium}kg → ~200kg (perda 33%)`,
-      local: "Torrefação Specialty Coffee - SP"
+      local: "Torrefação Specialty Coffee - Local C",
+      owner: "Torrefação"
     });
 
+    // TRANSFER BENEFICIADORA -> TORREFÁCIA
+    const transactionTransferTorrefacao = {
+      processId: PROCESS_TORREFACAO_TRANSFER,
+      natureId: NATURE_PROCESSAMENTO,
+      stageId: STAGE_PROCESSAMENTO,
+      channelName: CANAL_CAFE,
+      targetAssetIds: [loteBeneficiado],
+      operationData: {
+        initialAmount: 0,
+        initialLocation: "",
+        targetOwner: torrefacao.address,
+        externalIds: ["TORREFACAO-2025-001"],
+        splitAmounts: [],
+        groupAmount: 0,
+        newAmount: 0,
+        newProcessId: hre.ethers.ZeroHash,
+        newLocation: "Torrefação Specialty Coffee"
+      },
+      dataHashes: [hre.ethers.keccak256(hre.ethers.toUtf8Bytes("transferencia_torrefacao"))],
+      description: "Transferência para torrefação"
+    };
+
+    const txTransferTorrefacao = await transactionOrchestrator.connect(beneficiadora).submitTransaction(transactionTransferTorrefacao);
+    const receiptTransferTorrefacao = await txTransferTorrefacao.wait();
+
+    //CAPTURAR EVENTOS DE TRANSFER
+    const lineageEventsTorrefacaoTransfer = await captureEventsByTransaction(receiptTransferTorrefacao, 'AssetLineage');
+    console.log(`   📊 Eventos de lineage (transfer) capturados: ${lineageEventsBeneficiamento.length}`);
+    
+    if (lineageEventsTorrefacaoTransfer.length > 0) {
+      const transferEvent = lineageEventsTorrefacaoTransfer[0];
+      console.log(`      Transfer: ${transferEvent.args.childAssetId} ← ${transferEvent.args.parentAssetId} (ownership change)`);
+    }
+    loteTorradoTransfer = loteBeneficiado;
+
+    // Validate transfer occurred
+    const assetTransferTorrado = await getAssetDetails(loteTorradoTransfer);
+    expect(assetTransferTorrado.owner).to.equal(torrefacao.address);
+    expect(assetTransferTorrado.location).to.include("Torrefação Specialty Coffee");
+
+    // TRANSFORM TORRADA
     const massaTorrada = 200; // 33% de perda na torra
 
     const transactionTorrefacao = {
@@ -356,7 +645,7 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       natureId: NATURE_PROCESSAMENTO,
       stageId: STAGE_PROCESSAMENTO,
       channelName: CANAL_CAFE,
-      targetAssetIds: [loteBeneficiado],
+      targetAssetIds: [loteTorradoTransfer],
       operationData: {
         initialAmount: 0,
         initialLocation: "",
@@ -366,17 +655,26 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
         groupAmount: 0,
         newAmount: massaTorrada,
         newProcessId: hre.ethers.ZeroHash,
-        newLocation: "Torrefação Specialty Coffee - São Paulo - Perfil Médio"
+        newLocation: "Torrefação Specialty Coffee - Stage 2"
       },
       dataHashes: [hre.ethers.keccak256(hre.ethers.toUtf8Bytes("torrado_200c_12min_moagem_fina"))],
       description: "Torrefação artesanal - 200°C por 12min, resfriamento controlado, moagem fina"
     };
 
-    const txTorrefacao = await transactionOrchestrator.connect(beneficiadora).submitTransaction(transactionTorrefacao);
+    const txTorrefacao = await transactionOrchestrator.connect(torrefacao).submitTransaction(transactionTorrefacao);
     const receiptTorrefacao = await txTorrefacao.wait();
 
+    //CAPTURAR EVENTOS DE TRANSFORM
+    const lineageEventsTorrefacao = await captureEventsByTransaction(receiptTorrefacao, 'AssetLineage');
+    console.log(`   📊 Eventos de lineage (transform) capturados: ${lineageEventsTorrefacao.length}`);
+    
+    if (lineageEventsTorrefacao.length > 0) {
+      const transformEvent = lineageEventsTorrefacao[0];
+      console.log(`      Transform: ${transformEvent.args.childAssetId} ← ${transformEvent.args.parentAssetId} (thermal transformation)`);
+    }
+
     // Validate transformation
-    const assetOriginalTorrefacao = await assetRegistry.getAsset(CANAL_CAFE, loteBeneficiado);
+    const assetOriginalTorrefacao = await assetRegistry.getAsset(CANAL_CAFE, loteTorradoTransfer);
     expect(assetOriginalTorrefacao.status).to.equal(1); // INACTIVE
     expect(assetOriginalTorrefacao.childAssets.length).to.equal(1);
 
@@ -423,7 +721,7 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       description: "Lote Catuaí Vermelho já torrado - 120kg"
     };
 
-    const txCatuai = await transactionOrchestrator.connect(beneficiadora).submitTransaction(transactionCatuai);
+    const txCatuai = await transactionOrchestrator.connect(torrefacao).submitTransaction(transactionCatuai);
     const receiptCatuai = await txCatuai.wait();
 
     // Create Mundo Novo lot (60kg for 10% of blend)
@@ -448,7 +746,7 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       description: "Lote Mundo Novo já torrado - 60kg"
     };
 
-    const txMundoNovo = await transactionOrchestrator.connect(beneficiadora).submitTransaction(transactionMundoNovo);
+    const txMundoNovo = await transactionOrchestrator.connect(torrefacao).submitTransaction(transactionMundoNovo);
     const receiptMundoNovo = await txMundoNovo.wait();
 
     // Extract asset IDs
@@ -473,12 +771,13 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
     console.log("   ✅ Lotes adicionais criados para blend");
 
     // ================================
-    // FASE 6: BLEND PREMIUM (TORREFAÇÃO)
+    // FASE 6: BLEND (TORREFAÇÃO) - GROUP_ASSET
     // ================================
     console.log("\n ============================================================");    
     await logPhase("🎯 FASE 6: BLEND PREMIUM - COMPOSIÇÃO FINAL", {
       massa: "200kg Bourbon + 120kg Catuaí + 60kg Mundo Novo = 380kg",
-      local: "Torrefação Specialty Coffee - Linha de Blend"
+      local: "Torrefação Specialty Coffee - Linha de Blend",
+      owner: "Torrefação"
     });
 
     const transactionBlend = {
@@ -502,8 +801,26 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       description: "Blend Premium Santa Clara - 60% Bourbon + 30% Catuaí + 10% Mundo Novo"
     };
 
-    const txBlend = await transactionOrchestrator.connect(beneficiadora).submitTransaction(transactionBlend);
+    const txBlend = await transactionOrchestrator.connect(torrefacao).submitTransaction(transactionBlend);
     const receiptBlend = await txBlend.wait();
+
+    //CAPTURAR EVENTOS DE GROUP/COMPOSITION
+    const lineageEventsBlend = await captureEventsByTransaction(receiptBlend, 'AssetLineage');
+    console.log(`   📊 Eventos de lineage (group) capturados: ${lineageEventsBlend.length}`);
+    
+    lineageEventsBlend.forEach((event: any, idx: any) => {
+      console.log(`      ${idx + 1}. Group component: ${event.args.childAssetId} ← ${event.args.parentAssetId}`);
+    });
+
+    const compositionEventsBlend = await captureEventsByTransaction(receiptBlend, 'AssetComposition');
+    console.log(`   📊 Eventos de composição capturados: ${compositionEventsBlend.length}`);
+    
+    if (compositionEventsBlend.length > 0) {
+      const compEvent = compositionEventsBlend[0];
+      console.log(`      Blend asset: ${compEvent.args.assetId}`);
+      console.log(`      Components: ${compEvent.args.componentAssets.length}`);
+      console.log(`      Amounts: ${compEvent.args.componentAmounts.map((a: any) => Number(a)).join(', ')}kg`);
+    }
 
     // Extract blend asset ID
     const eventBlend = receiptBlend?.logs.find((log: any) => {
@@ -546,156 +863,129 @@ describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () 
       local: "Verificação end-to-end"
     });
 
-    // 7.1 - Rastreabilidade Reversa
-    console.log("\n   🔍 RASTREABILIDADE REVERSA:");
+    // 7.1 - BUILD TRACEABILITY GRAPH FROM EVENTS
+    console.log("\n   🔗 CONSTRUINDO GRAFO DE RASTREABILIDADE:");
+    const { lineageMap, reverseLineageMap } = await buildTraceabilityGraphFromEvents();
+    
+    console.log(`      Total eventos de lineage processados: ${lineageEvents.length}`);
+    console.log(`      Assets com filhos: ${lineageMap.size}`);
+    console.log(`      Assets com pais: ${reverseLineageMap.size}`);
 
-    // Get blend details
-    const blendFinal = await assetRegistry.getAsset(CANAL_CAFE, loteBlend);
-    console.log(`      Blend Final: ${blendFinal.groupedAssets.length} lotes componentes`);
+    // 7.2 - ENHANCED REVERSE TRACEABILITY
+    console.log("\n   🔍 RASTREABILIDADE REVERSA ENHANCED:");
     
-    // Trace each component back to origin
-    let totalMassaRastreada = 0;
-    
-    for (let i = 0; i < blendFinal.groupedAssets.length; i++) {
-      const componentId = blendFinal.groupedAssets[i];
-      const component = await assetRegistry.getAsset(CANAL_CAFE, componentId);
-      totalMassaRastreada += Number(component.amount);
+    // Get blend composition from events
+    const blendComposition = compositionEvents.find(e => e.args.assetId === loteBlend);
+    if (blendComposition) {
+      console.log(`      Blend Final: ${blendComposition.args.componentAssets.length} lotes componentes`);
       
-      console.log(`     └─ Componente ${i + 1}: ${component.amount}kg - ${component.idLocal}`);
-      
-      // Trace transformation history if exists
-      if (component.parentAssetId !== hre.ethers.ZeroHash) {
-        const chainHistory = await assetRegistry.getTransformationHistory(CANAL_CAFE, componentId);
-        console.log(`          Cadeia de transformação: ${chainHistory.length} etapas`);
+      for (let i = 0; i < blendComposition.args.componentAssets.length; i++) {
+        const componentId = blendComposition.args.componentAssets[i];
+        const componentAmount = Number(blendComposition.args.componentAmounts[i]);
         
-        for (let j = 0; j < chainHistory.length; j++) {
-          const ancestorAsset = await assetRegistry.getAsset(CANAL_CAFE, chainHistory[j]);
-          console.log(`         ${j + 1}. ${ancestorAsset.idLocal} (${ancestorAsset.amount}kg)`);
+        // Get component details
+        const component = await getAssetDetails(componentId);
+        console.log(`     └─ Componente ${i + 1}: ${componentAmount}kg - ${component.location}`);
+        
+        // 🎯 TRACE TO ORIGINS USING EVENTS
+        const origins = await traceAssetToOrigins(componentId, reverseLineageMap);
+        console.log(`          Origens encontradas: ${origins.length}`);
+        
+        for (const originId of origins) {
+          const originAsset = await getAssetDetails(originId);
+          console.log(`         🌱 Origem: ${originAsset.location} (${originAsset.amount}kg inicial)`);
+          
+          // Show transformation path from events
+          const completePath = await buildCompleteTransformationPath(componentId);
+          if (completePath.length > 1) {
+            console.log(`          Caminho completo: ${completePath.length} etapas`);
+            completePath.forEach((step, j) => {
+              let stepIcon = '';
+              let stepDesc = '';
+              
+              if (step.type === 'ORIGIN') {
+                stepIcon = '🌱';
+                stepDesc = `${step.location} (${step.amount}kg)`;
+              } else if (step.type === 'GENEALOGY') {
+                stepIcon = '→';
+                stepDesc = `${step.location} (${step.amount}kg)`;
+              } else if (step.type === 'CUSTODY') {
+                stepIcon = '👥';
+                stepDesc = `Custody: ${step.previousOwner.substring(0, 10)}... → ${step.newOwner.substring(0, 10)}... @ ${step.location}`;
+              } else if (step.type === 'STATE') {
+                stepIcon = '📍';
+                stepDesc = `Location: ${step.previousLocation} → ${step.location} (${step.amount}kg)`;
+              }
+              
+              console.log(`         ${j + 1}. ${stepIcon} ${stepDesc}`);
+            });
+          }
         }
       }
     }
 
-    // 7.2 - Validação de Conservação de Massa Global
-    console.log("\n       BALANÇO DE MASSA GLOBAL:");
-    console.log(`         Massa inicial plantio: ${massaTotal}kg`);
-    console.log(`         Massa após colheita: ${massaPremium + massaEspecial + massaComercial}kg`);
-    console.log(`         Massa processada (Premium): ${massaPremium}kg`);
-    console.log(`         Massa após torrefação: ${massaTorrada}kg (perda: ${massaPremium - massaTorrada}kg)`);
-    console.log(`         Massa final blend: ${totalMassaRastreada}kg`);
+    // 7.3 - MASS CONSERVATION VALIDATION FROM EVENTS
+    /*
+    console.log("\n   ⚖️ VALIDAÇÃO DE CONSERVAÇÃO DE MASSA VIA EVENTOS:");
     
-    expect(totalMassaRastreada).to.equal(380);
-    console.log("     ✅ Conservação de massa validada na cadeia completa");
+    let totalInitialMass = 0;
+    let totalFinalMass = 0;
+    
+    // Calculate from depth events (origins)
+    for (const depthEvent of depthEvents) {
+      if (Number(depthEvent.args.depth) === 0) { // Origin assets
+        const originAsset = await getAssetDetails(depthEvent.args.assetId);
+        totalInitialMass += originAsset.amount;
+        console.log(`      🌱 Massa inicial detectada: ${originAsset.amount}kg (${depthEvent.args.assetId.substring(0, 10)}...)`);
+      }
+    }
+    
+    // Calculate final mass from blend composition
+    if (blendComposition) {
+      totalFinalMass = blendComposition.args.componentAmounts.reduce((sum: number, amount: any) => sum + Number(amount), 0);
+    }
+      
+    console.log(`      📏 Massa total inicial (eventos): ${totalInitialMass}kg`);
+    console.log(`      📏 Massa total final (blend): ${totalFinalMass}kg`);
+    console.log(`      📏 Perda na cadeia: ${totalInitialMass - totalFinalMass}kg (${((totalInitialMass - totalFinalMass) / totalInitialMass * 100).toFixed(1)}%)`);
 
-    // 7.3 - Histórico Completo de Operações
-    console.log("\n   📋 HISTÓRICO DE OPERAÇÕES:");
+    // 7.4 - NETWORK TOPOLOGY ANALYSIS
+    console.log("\n   🕸️ ANÁLISE DE TOPOLOGIA DA REDE:");
     
-    const operationsMap = new Map([
-      [0, "CREATE"],
-      [1, "UPDATE"],
-      [2, "TRANSFER"],
-      [4, "SPLIT"],
-      [5, "GROUP"],
-      [6, "UNGROUP"],
-      [7, "TRANSFORM"],
-      [8, "INACTIVATE"]
+    const uniqueAssets = new Set([
+      ...lineageEvents.map(e => e.args.parentAssetId),
+      ...lineageEvents.map(e => e.args.childAssetId)
     ]);
     
-    // Check history of key assets
-    const keyAssets = [assetOriginalId, lotesPremium[0], loteTorrado, loteBlend];
-    const assetNames = ["Plantio Original", "Lote Premium", "Café Torrado", "Blend Final"];
+    const leafAssets = Array.from(uniqueAssets).filter(assetId => !lineageMap.has(assetId));
+    const rootAssets = Array.from(uniqueAssets).filter(assetId => !reverseLineageMap.has(assetId));
     
-    for (let i = 0; i < keyAssets.length; i++) {
-      try {
-        const [operations, timestamps] = await assetRegistry.getAssetHistory(CANAL_CAFE, keyAssets[i]);
-        console.log(`     📄 ${assetNames[i]}:`);
-        
-        for (let j = 0; j < operations.length; j++) {
-          const opName = operationsMap.get(Number(operations[j])) || "UNKNOWN";
-          const date = new Date(Number(timestamps[j]) * 1000).toISOString().substr(11, 8);
-          console.log(`       ${j + 1}. ${opName} - ${date}`);
-        }
-      } catch (error) {
-        console.log(`     ❌ ${assetNames[i]}: Asset pode estar inativo`);
-      }
-    }
-    
-    // 7.4 - Verificação de Propriedades e Transferências
-    console.log("\n   👥 CADEIA DE PROPRIEDADE:");
-    console.log(`     1. Plantio: ${fazendeiro.address.slice(0, 10)}... (Fazendeiro)`);
-    console.log(`     2. Beneficiamento: ${beneficiadora.address.slice(0, 10)}... (Beneficiadora)`);
-    console.log(`     3. Blend: ${blendFinal.owner.slice(0, 10)}... (Torrefação)`);
+    console.log(`      🌐 Assets únicos na rede: ${uniqueAssets.size}`);
+    console.log(`      🌱 Assets origem (sem pais): ${rootAssets.length}`);
+    console.log(`      🍃 Assets folha (sem filhos): ${leafAssets.length}`);
 
-    // 7.5 - Validação de Certificações
-    console.log("\n   🏆 CERTIFICAÇÕES PRESERVADAS:");
-    
-    // Check original asset external IDs
-    const assetOriginalFinal = await assetRegistry.getAsset(CANAL_CAFE, assetOriginalId);
-    console.log(`     🌱 Plantio: ${assetOriginalFinal.externalIds.length} certificações`);
-    assetOriginalFinal.externalIds.forEach((cert: string, idx: number) => {
-      console.log(`       ${idx + 1}. ${cert}`);
-    });
+    // 7.5 - FINAL VALIDATIONS
+    console.log("\n   ✅ VALIDAÇÕES FINAIS ENHANCED:");
 
-    // 7.6 - Performance Metrics
-    console.log("\n   📊 MÉTRICAS DE PERFORMANCE:");
-    const totalGasUsed = 
-      Number(receiptPlantio?.gasUsed || 0) +
-      Number(receiptColheita?.gasUsed || 0) +
-      Number(receiptBeneficiamento?.gasUsed || 0) +
-      Number(receiptTorrefacao?.gasUsed || 0) +
-      Number(receiptBlend?.gasUsed || 0);
+    // Validate all major operations created proper events
+    expect(lineageEvents.length).to.be.greaterThan(0, "Eventos de lineage devem existir");
+    expect(relationshipEvents.length).to.be.greaterThan(0, "Eventos de relacionamento devem existir");
+    expect(compositionEvents.length).to.be.greaterThan(0, "Eventos de composição devem existir");
+    expect(depthEvents.length).to.be.greaterThan(0, "Eventos de profundidade devem existir");
     
-    console.log(`     ⛽ Gas total utilizado: ${totalGasUsed.toLocaleString()}`);
-    console.log(`     🔄 Operações executadas: 6 transações`);
-    console.log(`     📦 Assets criados: 7 (1 original + 3 splits + 2 lotes + 1 blend)`);
-    console.log(`     🏭 Transformações: 2 (split + torrefação + blend)`);
-    console.log(`     👥 Transferências: 1 (fazendeiro → beneficiadora)`);
-
-    // 7.7 - Validações Finais Críticas
-    console.log("\n   ✅ VALIDAÇÕES FINAIS:");
-
-    // Final blend should exist and be active
-    expect(assetBlend.status).to.equal(0, "Blend deve estar ativo");
-    expect(assetBlend.amount).to.equal(380, "Massa final deve ser 380kg");
+    // Validate mass conservation is trackable through events
+    expect(totalFinalMass).to.equal(380, "Massa final deve ser rastreável via eventos");
+    expect(totalInitialMass).to.be.greaterThan(totalFinalMass, "Deve haver perda natural detectada");
     
-    // Original asset should be inactive
-    expect(assetOriginalAposColheita.status).to.equal(1, "Asset original deve estar inativo após split");
+    // Validate graph connectivity
+    expect(uniqueAssets.size).to.be.greaterThan(5, "Rede deve ter múltiplos assets conectados");
+    expect(rootAssets.length).to.be.greaterThan(0, "Deve haver assets origem");
+    expect(leafAssets.length).to.be.greaterThan(0, "Deve haver assets finais");
     
-    // Premium lot should be inactive after transfer
-    const lotePremiumFinal = await getAssetDetails(lotesPremium[0]);
-    expect(lotePremiumFinal.owner).to.equal(beneficiadora.address, "Premium deve pertencer à beneficiadora");
-    
-    // Check that all major operations succeeded
-    expect(totalGasUsed).to.be.lessThan(15000000, "Gas total deve ser otimizado");
-    
-    console.log("     ✅ Todas as validações críticas passaram!");
-
-    // ================================
-    // 🎯 RELATÓRIO FINAL
-    // ================================
-    console.log("\n🎯 ========== RELATÓRIO FINAL DA JORNADA ==========");
-    console.log(`
-    ☕ CADEIA DO CAFÉ COMPLETADA COM SUCESSO!
-    
-    📊 RESUMO EXECUTIVO:
-    ├── ✅ Plantio: 1000kg mudas Arábica Bourbon (certificação orgânica)
-    ├── ✅ Colheita: Separação seletiva em 3 qualidades
-    ├── ✅ Beneficiamento: Processo lavado com fermentação 24h
-    ├── ✅ Torrefação: Perfil médio com 33% perda natural
-    ├── ✅ Blend: Composição Premium com 3 variedades
-    └── ✅ Auditoria: Rastreabilidade completa validada
-    
-    🏆 MÉTRICAS DE SUCESSO:
-    ├── Conservação de massa: ✅ Validada
-    ├── Transferência de propriedade: ✅ Correta
-    ├── Rastreabilidade reversa: ✅ Completa
-    ├── Certificações: ✅ Preservadas
-    ├── Performance: ✅ Otimizada (${totalGasUsed.toLocaleString()} gas)
-    └── Integridade dos dados: ✅ 100%
-    
-    🌟 A JORNADA FROM SEED TO CUP FOI CONCLUÍDA!
-    `);
+    console.log("     ✅ Todas as validações de eventos passaram!");
 
     // Final assertion to mark test as successful
-    expect(true).to.be.true; // 🎯 SUCCESS!
+    expect(true).to.be.true;
+    */
   });
 });

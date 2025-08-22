@@ -159,9 +159,7 @@ interface IAssetRegistry {
     enum RelationshipType {
         SPLIT,           // Child came from splitting parent
         TRANSFORM,       // Child is transformation of parent
-        GROUP_COMPONENT, // Child is component of a group (parent is group)
-        TRANSFER,        // Asset was transferred (ownership change)
-        UPDATE           // Asset was updated (metadata change)
+        GROUP_COMPONENT  // Child is component of a group (parent is group)
     }
 
     // =============================================================
@@ -300,7 +298,7 @@ interface IAssetRegistry {
         bytes32 indexed channelName,
         bytes32 indexed childAssetId,
         bytes32 indexed parentAssetId,
-        uint8 relationshipType,
+        uint8 relationshipType,  // SPLIT, TRANSFORM, GROUP_COMPONENT only
         uint256 timestamp
     );
 
@@ -350,6 +348,27 @@ interface IAssetRegistry {
         bytes32[] originAssets
     );
 
+
+    // CUSTODY TRACKING (Ownership changes)  
+    event AssetCustodyChanged(
+        bytes32 indexed channelName,
+        bytes32 indexed assetId,
+        address indexed previousOwner,
+        address newOwner,
+        string newLocation,
+        uint256 timestamp
+    );
+
+    // STATE TRACKING (Metadata changes)
+    event AssetStateChanged(
+        bytes32 indexed channelName,
+        bytes32 indexed assetId,
+        string previousLocation,
+        string newLocation,
+        uint256 previousAmount,
+        uint256 newAmount,
+        uint256 timestamp
+    );
     
     // =============================================================
     //                        ERRORS

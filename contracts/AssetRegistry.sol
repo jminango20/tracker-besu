@@ -167,6 +167,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
 
         // Para assets criados (origem), emitir evento de profundidade 0
         bytes32[] memory emptyOrigins = new bytes32[](0);
+        
         _emitDepthCalculation(
             input.channelName,
             input.assetId,
@@ -210,6 +211,9 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             revert NotAssetOwner(update.channelName, update.assetId, originCaller);
         }
 
+        string memory previousLocation = asset.idLocal;
+        uint256 previousAmount = asset.amount;
+
         asset.idLocal = update.idLocal;
 
         if (update.amount > 0) {
@@ -227,11 +231,14 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
 
         _addToHistory(update.channelName, update.assetId, AssetOperation.UPDATE, Utils.timestamp());
 
-        _emitLineage(
+        emit AssetStateChanged(
             update.channelName,
-            update.assetId,          // child (updated asset)
-            update.assetId,          // parent (original asset state)
-            RelationshipType.UPDATE
+            update.assetId,
+            previousLocation,
+            update.idLocal,
+            previousAmount,
+            asset.amount,
+            Utils.timestamp()
         );
 
         emit AssetUpdated(
@@ -276,7 +283,8 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
 
         ChannelAccess.requireMember(_getAddressDiscovery(), transfer.channelName, transfer.newOwner);
 
-        address currentOwner = asset.owner;
+        address previousOwner = asset.owner;
+        string memory previousLocation = asset.idLocal;
 
         asset.owner = transfer.newOwner;    //New Owner
         asset.idLocal = transfer.idLocal;
@@ -290,22 +298,36 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
 
         //Update owner enumeration
-        _removeAssetFromOwner(transfer.channelName, transfer.assetId, currentOwner);
+        _removeAssetFromOwner(transfer.channelName, transfer.assetId, previousOwner);
         _addAssetToOwner(transfer.channelName, transfer.assetId, transfer.newOwner);
 
         _addToHistory(transfer.channelName, transfer.assetId, AssetOperation.TRANSFER, Utils.timestamp());
 
-        _emitLineage(
+        emit AssetCustodyChanged(
             transfer.channelName,
-            transfer.assetId,        // child (same asset, new ownership)
-            transfer.assetId,        // parent (same asset, old ownership)  
-            RelationshipType.TRANSFER
+            transfer.assetId,
+            previousOwner,
+            transfer.newOwner,
+            transfer.idLocal,
+            Utils.timestamp()
         );
+
+        if (keccak256(bytes(previousLocation)) != keccak256(bytes(transfer.idLocal))) {
+            emit AssetStateChanged(
+                transfer.channelName,
+                transfer.assetId,
+                previousLocation,
+                transfer.idLocal,
+                asset.amount,
+                asset.amount,
+                Utils.timestamp()
+            );
+        }
 
         emit AssetTransferred(
             transfer.channelName,
             transfer.assetId,
-            currentOwner,
+            previousOwner,
             transfer.newOwner,
             transfer.idLocal,
             Utils.timestamp()
