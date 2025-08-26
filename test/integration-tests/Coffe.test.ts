@@ -4,6 +4,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import hre from "hardhat";
 import { deployTransactionOrchestrator } from "../fixture/deployTransactionOrchestrator";
 import { getTestAccounts } from "../utils/index";
+import { SupplyChainTracer } from "../utils/SupplyChainTracer";
 
 describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () {
 
@@ -57,16 +58,6 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
   let loteBlend: string;
   let massaTotal: number = 1000; // kg inicial
 
-  //EVENT STORAGE FOR TRACEABILITY
-  let lineageEvents: any[] = [];
-  let relationshipEvents: any[] = [];
-  let compositionEvents: any[] = [];
-  let depthEvents: any[] = [];
-  let custodyEvents: any[] = []; 
-  let stateEvents: any[] = []; 
-
-
-
   //HELPER FUNCTIONS
   async function logPhase(phase: string, details: any) {
     console.log(`\n  ${phase}`);
@@ -96,204 +87,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     };
   }
 
-  //EVENT CAPTURE FUNCTIONS
-  async function captureEventsByTransaction(receipt: any, eventType: string) {
-    const events = receipt.logs
-      .filter((log: any) => {
-        try {
-          const parsed = assetRegistry.interface.parseLog(log);
-          return parsed?.name === eventType;
-        } catch { return false; }
-      })
-      .map((log: any) => assetRegistry.interface.parseLog(log));
-    
-    // Store events for later analysis
-    if (eventType === 'AssetLineage') {
-      lineageEvents.push(...events);
-    } else if (eventType === 'AssetRelationship') {
-      relationshipEvents.push(...events);
-    } else if (eventType === 'AssetComposition') {
-      compositionEvents.push(...events);
-    } else if (eventType === 'AssetDepthCalculated') {
-      depthEvents.push(...events);
-    } else if (eventType === 'AssetCustodyChanged') { 
-      custodyEvents.push(...events);
-    } else if (eventType === 'AssetStateChanged') {
-      stateEvents.push(...events);
-    }
-    
-    return events;
-  }
-
-  async function buildTraceabilityGraphFromEvents() {
-    console.log("\n   CONSTRUINDO GRAFO DE RASTREABILIDADE A PARTIR DOS EVENTOS:");
-    
-    //Mostrar todos os eventos de lineage
-    /*
-    console.log(`       DEBUG - Todos os eventos de lineage:`);
-    lineageEvents.forEach((event, idx) => {
-      const relType = Number(event.args.relationshipType);
-      const relTypeNames = ["SPLIT", "TRANSFORM", "GROUP_COMPONENT", "TRANSFER", "UPDATE"];
-      console.log(`         ${idx + 1}. Parent: ${event.args.parentAssetId.substring(0, 10)}... → Child: ${event.args.childAssetId.substring(0, 10)}... (${relTypeNames[relType]})`);
-    });
-    */
-    
-    // Create adjacency map for lineage
-    const lineageMap = new Map<string, any[]>();
-    const reverseLineageMap = new Map<string, any[]>();
-    
-    lineageEvents.forEach(event => {
-      const parent = event.args.parentAssetId;
-      const child = event.args.childAssetId;
-      const relType = Number(event.args.relationshipType);
-      const timestamp = Number(event.args.timestamp);
-      
-      // Forward lineage (parent -> children)
-      if (!lineageMap.has(parent)) {
-        lineageMap.set(parent, []);
-      }
-      lineageMap.get(parent)!.push({ child, relType, timestamp });
-      
-      // Reverse lineage (child -> parents)
-      if (!reverseLineageMap.has(child)) {
-        reverseLineageMap.set(child, []);
-      }
-      reverseLineageMap.get(child)!.push({ parent, relType, timestamp });
-    });
-    
-    //Mostrar mapas construídos
-    /*
-    console.log(`         DEBUG - Forward lineage map:`);
-    for (const [parent, children] of lineageMap.entries()) {
-      console.log(`         ${parent.substring(0, 10)}... → ${children.length} filhos`);
-    }
-    
-    console.log(`        DEBUG - Reverse lineage map:`);
-    for (const [child, parents] of reverseLineageMap.entries()) {
-      console.log(`         ${child.substring(0, 10)}... ← ${parents.length} pais`);
-    }
-    */
-    
-    return { lineageMap, reverseLineageMap };
-  }
-
-  async function traceAssetToOrigins(assetId: string, reverseLineageMap: Map<string, any[]>): Promise<string[]> {
-    const visited = new Set<string>();
-    const origins: string[] = [];
-    
-    async function dfs(currentId: string, depth: number = 0) {
-      
-      if (visited.has(currentId) || depth > 10) {
-        return;
-      }
-      visited.add(currentId);
-      
-      const parents = reverseLineageMap.get(currentId) || [];
-      
-      if (parents.length === 0) {
-        // This is an origin asset
-        origins.push(currentId);
-        return;
-      }
-      
-      for (const parentInfo of parents) {
-        await dfs(parentInfo.parent, depth + 1);
-      }
-    }
-    
-    await dfs(assetId);
-    return origins;
-  }
-
-  async function buildCompleteTransformationPath(assetId: string): Promise<any[]> {
-    console.log(`          🔍 CONSTRUINDO CAMINHO COMPLETO para: ${assetId.substring(0, 10)}...`);
-    
-    const completePath: any[] = [];
-    
-    // 1. Build genealogical backbone from lineage events
-    const genealogyPath = await traceGenealogyToOrigin(assetId);
-    
-    // 2. For each asset in genealogy, find custody/state changes
-    for (let i = 0; i < genealogyPath.length; i++) {
-      const currentAssetId = genealogyPath[i];
-      const assetDetails = await getAssetDetails(currentAssetId);
-      
-      // Add the asset to path
-      completePath.push({
-        type: i === 0 ? 'ORIGIN' : 'GENEALOGY',
-        assetId: currentAssetId,
-        location: assetDetails.location,
-        amount: assetDetails.amount,
-        step: i + 1
-      });
-      
-      // Find custody changes for this asset
-      const assetCustodyChanges = custodyEvents.filter(e => e.args.assetId === currentAssetId);
-      assetCustodyChanges.forEach((custodyEvent, idx) => {
-        completePath.push({
-          type: 'CUSTODY',
-          assetId: currentAssetId,
-          location: custodyEvent.args.newLocation,
-          amount: assetDetails.amount,
-          previousOwner: custodyEvent.args.previousOwner,
-          newOwner: custodyEvent.args.newOwner,
-          step: `${i + 1}.${idx + 1}`
-        });
-      });
-      
-      // Find state changes for this asset
-      const assetStateChanges = stateEvents.filter(e => e.args.assetId === currentAssetId);
-      assetStateChanges.forEach((stateEvent, idx) => {
-        completePath.push({
-          type: 'STATE',
-          assetId: currentAssetId,
-          location: stateEvent.args.newLocation,
-          amount: Number(stateEvent.args.newAmount),
-          previousLocation: stateEvent.args.previousLocation,
-          step: `${i + 1}.${idx + 1}`
-        });
-      });
-    }
-    
-    // 3. Sort by step order to maintain chronology
-    completePath.sort((a, b) => {
-      const stepA = parseFloat(a.step.toString());
-      const stepB = parseFloat(b.step.toString());
-      return stepA - stepB;
-    });
-    
-    console.log(`          🎯 Caminho completo construído com ${completePath.length} etapas`);
-    return completePath;
-  }
-
-  // Helper function for genealogy-only path
-  async function traceGenealogyToOrigin(assetId: string): Promise<string[]> {
-    const { lineageMap, reverseLineageMap } = await buildTraceabilityGraphFromEvents();
-    const path: string[] = [];
-    const visited = new Set<string>();
-    
-    async function tracePath(currentId: string) {
-      if (visited.has(currentId) || path.length > 10) return;
-      visited.add(currentId);
-      path.unshift(currentId);
-      
-      const parents = reverseLineageMap.get(currentId) || [];
-      
-      // Only follow genealogical parents (exclude TRANSFER/UPDATE)
-      const genealogicalParents = parents.filter(p => p.relType !== 3 && p.relType !== 4);
-      
-      if (genealogicalParents.length > 0) {
-        // Follow first genealogical parent
-        await tracePath(genealogicalParents[0].parent);
-      }
-    }
-    
-    await tracePath(assetId);
-    return path;
-  }
-
-  it("COMPLETE COFFEE SUPPLY CHAIN", async function () {
-    
+  it("COMPLETE COFFEE SUPPLY CHAIN", async function () {    
     // ================================
     // FASE 0: SETUP INICIAL COMPLETO
     // ================================
@@ -305,7 +99,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     beneficiadora = accounts.wallet2;
     torrefacao = accounts.wallet3; 
     auditor = accounts.wallet4;
-
+    
     // Deploy all contracts
     const deployment = await loadFixture(deployTransactionOrchestrator);
     transactionOrchestrator = deployment.transactionOrchestrator;
@@ -313,6 +107,8 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     schemaRegistry = deployment.schemaRegistry;
     assetRegistry = deployment.assetRegistry;
     accessChannelManager = deployment.accessChannelManager;
+    
+    const tracer = new SupplyChainTracer(assetRegistry, CANAL_CAFE);
 
     console.log("   ✅ Contratos deployados com sucesso");
 
@@ -405,14 +201,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     const txPlantio = await transactionOrchestrator.connect(fazendeiro).submitTransaction(transactionPlantio);
     const receiptPlantio = await txPlantio.wait();
 
-    const depthEventsPlantio = await captureEventsByTransaction(receiptPlantio, 'AssetDepthCalculated');
-    
-    if (depthEventsPlantio.length > 0) {
-      const depthEvent = depthEventsPlantio[0];
-      console.log(`      Asset ID: ${depthEvent.args.assetId}`);
-      console.log(`      Profundidade: ${depthEvent.args.depth} (origem)`);
-      console.log(`      Origins: ${depthEvent.args.originAssets.length} (vazio para origem)`);
-    }
+    await tracer.captureAllEventsFromTransaction(receiptPlantio);
 
     // Extract asset ID from events
     const eventPlantio = receiptPlantio?.logs.find((log: any) => {
@@ -467,7 +256,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
         groupAmount: 0,
         newAmount: 0,
         newProcessId: hre.ethers.ZeroHash,
-        newLocation: "Terreiro de Secagem - Separação Manual Seletiva"
+        newLocation: "Fazenda DAT - Terreiro de Secagem - Local B"
       },
       dataHashes: [
         hre.ethers.keccak256(hre.ethers.toUtf8Bytes("premium_cereja_descascado")),
@@ -480,26 +269,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     const txColheita = await transactionOrchestrator.connect(fazendeiro).submitTransaction(transactionColheita);
     const receiptColheita = await txColheita.wait();
 
-    //CAPTURAR EVENTOS DE LINEAGE
-    const lineageEventsColheita = await captureEventsByTransaction(receiptColheita, 'AssetLineage');
-    console.log(`   📊 Eventos de lineage capturados: ${lineageEventsColheita.length}`);
-
-    lineageEventsColheita.forEach((event: any, idx: any) => {
-      const relType = Number(event.args.relationshipType);
-      const relTypeNames = ["SPLIT", "TRANSFORM", "GROUP_COMPONENT", "TRANSFER", "UPDATE"];
-      console.log(`      ${idx + 1}. ${event.args.childAssetId} ← ${event.args.parentAssetId} (${relTypeNames[relType] || relType})`);
-    });
-
-    //CAPTURAR EVENTOS DE RELATIONSHIP
-    const relationshipEventsColheita = await captureEventsByTransaction(receiptColheita, 'AssetRelationship');
-    console.log(`   📊 Eventos de relacionamento capturados: ${relationshipEventsColheita.length}`);
-    
-    if (relationshipEventsColheita.length > 0) {
-      const relEvent = relationshipEventsColheita[0];
-      console.log(`      Operação: SPLIT (${relEvent.args.operationType})`);
-      console.log(`      Asset principal: ${relEvent.args.primaryAssetId}`);
-      console.log(`      Assets relacionados: ${relEvent.args.relatedAssets.length}`);
-    }
+    await tracer.captureAllEventsFromTransaction(receiptColheita);
 
     // Validate split occurred
     const assetOriginalAposColheita = await assetRegistry.getAsset(CANAL_CAFE, assetOriginalId);
@@ -529,15 +299,14 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
       local: lotePremium.location,
       owner: lotePremium.owner,
       gasUsed: receiptColheita?.gasUsed
-    });
-
+    }); 
     // ================================
     // FASE 3: BENEFICIAMENTO (FAZENDEIRO → BENEFICIADORA) - TRANSFERÊNCIA
     // ================================
     console.log("\n ============================================================");
     await logPhase("🎯 FASE 3: BENEFICIAMENTO - TRANSFERÊNCIA", {
       massa: massaPremium,
-      local: "Beneficiadora Vale do Rio Doce",
+      local: "Beneficiadora Vale do Rio Doce - Local C",
       owner: "Beneficiadora",
     });
 
@@ -556,7 +325,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
         groupAmount: 0,
         newAmount: 0,
         newProcessId: hre.ethers.ZeroHash,
-        newLocation: "Beneficiadora Vale do Rio Doce - Linha Lavado"
+        newLocation: "Beneficiadora Vale do Rio Doce - Local C"
       },
       dataHashes: [hre.ethers.keccak256(hre.ethers.toUtf8Bytes("lavado_fermentacao_24h_premium"))],
       description: "Transferência para beneficiamento - Processo lavado com fermentação controlada 24h"
@@ -565,14 +334,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     const txBeneficiamento = await transactionOrchestrator.connect(fazendeiro).submitTransaction(transactionBeneficiamento);
     const receiptBeneficiamento = await txBeneficiamento.wait();
 
-    //CAPTURAR EVENTOS DE TRANSFER
-    const lineageEventsBeneficiamento = await captureEventsByTransaction(receiptBeneficiamento, 'AssetLineage');
-    console.log(`   📊 Eventos de lineage (transfer) capturados: ${lineageEventsBeneficiamento.length}`);
-    
-    if (lineageEventsBeneficiamento.length > 0) {
-      const transferEvent = lineageEventsBeneficiamento[0];
-      console.log(`      Transfer: ${transferEvent.args.childAssetId} ← ${transferEvent.args.parentAssetId} (ownership change)`);
-    }
+    await tracer.captureAllEventsFromTransaction(receiptBeneficiamento);
 
     // Validate transfer occurred
     const assetBeneficiado = await getAssetDetails(lotesPremium[0]);
@@ -593,7 +355,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     console.log("\n ============================================================");
     await logPhase("🎯 FASE 4: TORREFAÇÃO - TRANSFORMAÇÃO TÉRMICA", {
       massa: `${massaPremium}kg → ~200kg (perda 33%)`,
-      local: "Torrefação Specialty Coffee - Local C",
+      local: "Torrefação Specialty Coffee - Local D",
       owner: "Torrefação"
     });
 
@@ -622,14 +384,8 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     const txTransferTorrefacao = await transactionOrchestrator.connect(beneficiadora).submitTransaction(transactionTransferTorrefacao);
     const receiptTransferTorrefacao = await txTransferTorrefacao.wait();
 
-    //CAPTURAR EVENTOS DE TRANSFER
-    const lineageEventsTorrefacaoTransfer = await captureEventsByTransaction(receiptTransferTorrefacao, 'AssetLineage');
-    console.log(`   📊 Eventos de lineage (transfer) capturados: ${lineageEventsBeneficiamento.length}`);
-    
-    if (lineageEventsTorrefacaoTransfer.length > 0) {
-      const transferEvent = lineageEventsTorrefacaoTransfer[0];
-      console.log(`      Transfer: ${transferEvent.args.childAssetId} ← ${transferEvent.args.parentAssetId} (ownership change)`);
-    }
+    await tracer.captureAllEventsFromTransaction(receiptTransferTorrefacao);
+
     loteTorradoTransfer = loteBeneficiado;
 
     // Validate transfer occurred
@@ -639,7 +395,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
 
     // TRANSFORM TORRADA
     const massaTorrada = 200; // 33% de perda na torra
-
+    
     const transactionTorrefacao = {
       processId: PROCESS_TORREFACAO,
       natureId: NATURE_PROCESSAMENTO,
@@ -664,14 +420,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     const txTorrefacao = await transactionOrchestrator.connect(torrefacao).submitTransaction(transactionTorrefacao);
     const receiptTorrefacao = await txTorrefacao.wait();
 
-    //CAPTURAR EVENTOS DE TRANSFORM
-    const lineageEventsTorrefacao = await captureEventsByTransaction(receiptTorrefacao, 'AssetLineage');
-    console.log(`   📊 Eventos de lineage (transform) capturados: ${lineageEventsTorrefacao.length}`);
-    
-    if (lineageEventsTorrefacao.length > 0) {
-      const transformEvent = lineageEventsTorrefacao[0];
-      console.log(`      Transform: ${transformEvent.args.childAssetId} ← ${transformEvent.args.parentAssetId} (thermal transformation)`);
-    }
+    await tracer.captureAllEventsFromTransaction(receiptTorrefacao);
 
     // Validate transformation
     const assetOriginalTorrefacao = await assetRegistry.getAsset(CANAL_CAFE, loteTorradoTransfer);
@@ -804,23 +553,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     const txBlend = await transactionOrchestrator.connect(torrefacao).submitTransaction(transactionBlend);
     const receiptBlend = await txBlend.wait();
 
-    //CAPTURAR EVENTOS DE GROUP/COMPOSITION
-    const lineageEventsBlend = await captureEventsByTransaction(receiptBlend, 'AssetLineage');
-    console.log(`   📊 Eventos de lineage (group) capturados: ${lineageEventsBlend.length}`);
-    
-    lineageEventsBlend.forEach((event: any, idx: any) => {
-      console.log(`      ${idx + 1}. Group component: ${event.args.childAssetId} ← ${event.args.parentAssetId}`);
-    });
-
-    const compositionEventsBlend = await captureEventsByTransaction(receiptBlend, 'AssetComposition');
-    console.log(`   📊 Eventos de composição capturados: ${compositionEventsBlend.length}`);
-    
-    if (compositionEventsBlend.length > 0) {
-      const compEvent = compositionEventsBlend[0];
-      console.log(`      Blend asset: ${compEvent.args.assetId}`);
-      console.log(`      Components: ${compEvent.args.componentAssets.length}`);
-      console.log(`      Amounts: ${compEvent.args.componentAmounts.map((a: any) => Number(a)).join(', ')}kg`);
-    }
+    await tracer.captureAllEventsFromTransaction(receiptBlend);
 
     // Extract blend asset ID
     const eventBlend = receiptBlend?.logs.find((log: any) => {
@@ -858,134 +591,53 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     // 🔍 FASE 7: AUDITORIA COMPLETA (AUDITOR)
     // ================================
     console.log("\n ============================================================");    
-    await logPhase("🔍 FASE 7: AUDITORIA COMPLETA - RASTREABILIDADE TOTAL", {
-      massa: assetBlend.amount,
-      local: "Verificação end-to-end"
+    await logPhase("🔍 FASE 7: AUDITORIA ENHANCED - API LIMPA", {
+      //massa: assetBlend.amount,
+      local: "Verificação end-to-end com biblioteca"
     });
 
-    // 7.1 - BUILD TRACEABILITY GRAPH FROM EVENTS
-    console.log("\n   🔗 CONSTRUINDO GRAFO DE RASTREABILIDADE:");
-    const { lineageMap, reverseLineageMap } = await buildTraceabilityGraphFromEvents();
-    
-    console.log(`      Total eventos de lineage processados: ${lineageEvents.length}`);
-    console.log(`      Assets com filhos: ${lineageMap.size}`);
-    console.log(`      Assets com pais: ${reverseLineageMap.size}`);
+    // 7.1 - Stats da biblioteca
+    console.log("\n   📊 ESTATÍSTICAS DOS EVENTOS:");
+    const stats = tracer.getCacheStats();
+    console.log(`      Total eventos capturados: ${Object.values(stats.events).reduce((a: number, b: unknown) => a + (b as number), 0)}`);
+    console.log(`      Cache hits: ${stats.cache.paths} caminhos, ${stats.cache.origins} origens`);
 
-    // 7.2 - ENHANCED REVERSE TRACEABILITY
-    console.log("\n   🔍 RASTREABILIDADE REVERSA ENHANCED:");
-    
-    // Get blend composition from events
-    const blendComposition = compositionEvents.find(e => e.args.assetId === loteBlend);
-    if (blendComposition) {
-      console.log(`      Blend Final: ${blendComposition.args.componentAssets.length} lotes componentes`);
+    // 7.2 - Rastreabilidade usando API limpa
+    console.log("\n   🔍 RASTREABILIDADE ENHANCED:");
+    const composition = await tracer.getComposition(loteBlend);
+
+    if (composition) {
+      console.log(`      Blend Final: ${composition.componentCount} componentes (${composition.totalAmount}kg)`);
       
-      for (let i = 0; i < blendComposition.args.componentAssets.length; i++) {
-        const componentId = blendComposition.args.componentAssets[i];
-        const componentAmount = Number(blendComposition.args.componentAmounts[i]);
+      for (let i = 0; i < composition.components.length; i++) {
+        const component = composition.components[i];
+        console.log(`     └─ Componente ${i + 1}: ${component.amount}kg (${component.percentage.toFixed(1)}%) - ${component.location}`);
         
-        // Get component details
-        const component = await getAssetDetails(componentId);
-        console.log(`     └─ Componente ${i + 1}: ${componentAmount}kg - ${component.location}`);
+        // Caminho completo usando API
+        const fullPath = await tracer.getCompleteTraceabilityPath(component.assetId);
+        console.log(`          Caminho: ${fullPath.totalSteps} etapas (${fullPath.genealogyDepth} genealógicas)`);
+        console.log(`          Origem: ${fullPath.origins.length} origem(s)`);
         
-        // 🎯 TRACE TO ORIGINS USING EVENTS
-        const origins = await traceAssetToOrigins(componentId, reverseLineageMap);
-        console.log(`          Origens encontradas: ${origins.length}`);
-        
-        for (const originId of origins) {
-          const originAsset = await getAssetDetails(originId);
-          console.log(`         🌱 Origem: ${originAsset.location} (${originAsset.amount}kg inicial)`);
-          
-          // Show transformation path from events
-          const completePath = await buildCompleteTransformationPath(componentId);
-          if (completePath.length > 1) {
-            console.log(`          Caminho completo: ${completePath.length} etapas`);
-            completePath.forEach((step, j) => {
-              let stepIcon = '';
-              let stepDesc = '';
-              
-              if (step.type === 'ORIGIN') {
-                stepIcon = '🌱';
-                stepDesc = `${step.location} (${step.amount}kg)`;
-              } else if (step.type === 'GENEALOGY') {
-                stepIcon = '→';
-                stepDesc = `${step.location} (${step.amount}kg)`;
-              } else if (step.type === 'CUSTODY') {
-                stepIcon = '👥';
-                stepDesc = `Custody: ${step.previousOwner.substring(0, 10)}... → ${step.newOwner.substring(0, 10)}... @ ${step.location}`;
-              } else if (step.type === 'STATE') {
-                stepIcon = '📍';
-                stepDesc = `Location: ${step.previousLocation} → ${step.location} (${step.amount}kg)`;
-              }
-              
-              console.log(`         ${j + 1}. ${stepIcon} ${stepDesc}`);
-            });
-          }
+        if (fullPath.summary.massLoss) {
+          console.log(`          Perda: ${fullPath.summary.massLoss.lossPercentage.toFixed(1)}% (${fullPath.summary.massLoss.initial}kg → ${fullPath.summary.massLoss.final}kg)`);
         }
       }
     }
+  
 
-    // 7.3 - MASS CONSERVATION VALIDATION FROM EVENTS
-    /*
-    console.log("\n   ⚖️ VALIDAÇÃO DE CONSERVAÇÃO DE MASSA VIA EVENTOS:");
-    
-    let totalInitialMass = 0;
-    let totalFinalMass = 0;
-    
-    // Calculate from depth events (origins)
-    for (const depthEvent of depthEvents) {
-      if (Number(depthEvent.args.depth) === 0) { // Origin assets
-        const originAsset = await getAssetDetails(depthEvent.args.assetId);
-        totalInitialMass += originAsset.amount;
-        console.log(`      🌱 Massa inicial detectada: ${originAsset.amount}kg (${depthEvent.args.assetId.substring(0, 10)}...)`);
-      }
-    }
-    
-    // Calculate final mass from blend composition
-    if (blendComposition) {
-      totalFinalMass = blendComposition.args.componentAmounts.reduce((sum: number, amount: any) => sum + Number(amount), 0);
-    }
-      
-    console.log(`      📏 Massa total inicial (eventos): ${totalInitialMass}kg`);
-    console.log(`      📏 Massa total final (blend): ${totalFinalMass}kg`);
-    console.log(`      📏 Perda na cadeia: ${totalInitialMass - totalFinalMass}kg (${((totalInitialMass - totalFinalMass) / totalInitialMass * 100).toFixed(1)}%)`);
+    // AQUI
+    const detailedPath = await tracer.getDetailedAssetPath(loteBlend);
 
-    // 7.4 - NETWORK TOPOLOGY ANALYSIS
-    console.log("\n   🕸️ ANÁLISE DE TOPOLOGIA DA REDE:");
-    
-    const uniqueAssets = new Set([
-      ...lineageEvents.map(e => e.args.parentAssetId),
-      ...lineageEvents.map(e => e.args.childAssetId)
-    ]);
-    
-    const leafAssets = Array.from(uniqueAssets).filter(assetId => !lineageMap.has(assetId));
-    const rootAssets = Array.from(uniqueAssets).filter(assetId => !reverseLineageMap.has(assetId));
-    
-    console.log(`      🌐 Assets únicos na rede: ${uniqueAssets.size}`);
-    console.log(`      🌱 Assets origem (sem pais): ${rootAssets.length}`);
-    console.log(`      🍃 Assets folha (sem filhos): ${leafAssets.length}`);
+    console.log('\n   Asset Path Details:');
+    tracer.displayDetailedPathJSON(detailedPath);
 
-    // 7.5 - FINAL VALIDATIONS
-    console.log("\n   ✅ VALIDAÇÕES FINAIS ENHANCED:");
+    // Ou formato tabular:
+    console.log('\n   Step | Type      | Amount | Location              | Owner    | Operation');
+    console.log('   -----|-----------|--------|----------------------|----------|----------');
+    detailedPath.steps.forEach(step => {
+      console.log(`   ${step.stepNumber.toString().padEnd(4)} | ${step.stepType.padEnd(9)} | ${step.asset.amount.toString().padEnd(6)} | ${step.asset.idLocal.padEnd(20)} | ${step.asset.owner.substring(0, 8)} | ${step.operation}`);
+    });
 
-    // Validate all major operations created proper events
-    expect(lineageEvents.length).to.be.greaterThan(0, "Eventos de lineage devem existir");
-    expect(relationshipEvents.length).to.be.greaterThan(0, "Eventos de relacionamento devem existir");
-    expect(compositionEvents.length).to.be.greaterThan(0, "Eventos de composição devem existir");
-    expect(depthEvents.length).to.be.greaterThan(0, "Eventos de profundidade devem existir");
-    
-    // Validate mass conservation is trackable through events
-    expect(totalFinalMass).to.equal(380, "Massa final deve ser rastreável via eventos");
-    expect(totalInitialMass).to.be.greaterThan(totalFinalMass, "Deve haver perda natural detectada");
-    
-    // Validate graph connectivity
-    expect(uniqueAssets.size).to.be.greaterThan(5, "Rede deve ter múltiplos assets conectados");
-    expect(rootAssets.length).to.be.greaterThan(0, "Deve haver assets origem");
-    expect(leafAssets.length).to.be.greaterThan(0, "Deve haver assets finais");
-    
-    console.log("     ✅ Todas as validações de eventos passaram!");
-
-    // Final assertion to mark test as successful
-    expect(true).to.be.true;
-    */
+    console.log("\n   ✅ RASTREABILIDADE COMPLETA VALIDADA COM API ENHANCED!");   
   });
 });

@@ -308,7 +308,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             transfer.assetId,
             previousOwner,
             transfer.newOwner,
-            transfer.idLocal,
+            previousLocation,
             Utils.timestamp()
         );
 

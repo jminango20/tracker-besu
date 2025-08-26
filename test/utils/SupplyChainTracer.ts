@@ -208,117 +208,207 @@ export class SupplyChainTracer {
   }
 
   // 🔧 Internal Methods
-  private async buildCompleteTraceabilityPath(assetId: string): Promise<CompleteTraceabilityPath> {
-    const completePath: TraceabilityStep[] = [];
-    let stepCounter = 1;
+private async buildCompleteTraceabilityPath(assetId: string): Promise<CompleteTraceabilityPath> {
+  const completePath: TraceabilityStep[] = [];
+  let stepCounter = 1;
 
-    // 1. Build genealogical backbone
-    const genealogyPath = await this.traceGenealogyToOrigin(assetId);
+  // 1. Build genealogical backbone
+  const genealogyPath = await this.traceGenealogyToOrigin(assetId);
+  
+  // 2. For each asset in genealogy, add its lifecycle (including inherited events)
+  for (let i = 0; i < genealogyPath.length; i++) {
+    const currentAssetId = genealogyPath[i];
+    const isOrigin = i === 0;
+    const isTarget = currentAssetId === assetId;
     
-    // 2. For each asset in genealogy, find custody/state changes
-    for (let i = 0; i < genealogyPath.length; i++) {
-      const currentAssetId = genealogyPath[i];
-      const assetDetails = await this.getAssetDetails(currentAssetId);
-      
-      // Add the genealogical asset to path
-      completePath.push({
-        step: stepCounter++,
-        type: i === 0 ? 'ORIGIN' : 'GENEALOGY',
-        data: {
-          assetId: currentAssetId,
-          location: assetDetails.location,
-          amount: assetDetails.amount,
-          relationshipType: i > 0 ? this.getRelationshipType(currentAssetId, genealogyPath[i-1]) : undefined
-        }
-      });
-      
-      // Find custody changes for this asset
-      const assetCustodyChanges = this.cache.getCustodyEvents()
-        .filter(e => e.args.assetId === currentAssetId)
-        .sort((a, b) => Number(a.args.timestamp) - Number(b.args.timestamp));
-        
-      for (const custodyEvent of assetCustodyChanges) {
+    // Add genealogical step with creation state
+    const genealogyState = await this.getAssetStateAtCreation(currentAssetId);
+    
+    completePath.push({
+      step: stepCounter++,
+      type: isOrigin ? 'ORIGIN' : 'GENEALOGY',
+      data: {
+        assetId: currentAssetId,
+        location: genealogyState.location,
+        amount: genealogyState.amount,
+        relationshipType: !isOrigin ? this.getRelationshipType(currentAssetId, genealogyPath[i-1]) : undefined
+      }
+    });
+    
+    // Add custody/state events for this specific asset
+    const assetEvents = await this.buildChronologicalEventTimeline(currentAssetId);
+    
+    for (const event of assetEvents) {
+      if (event.type === 'CUSTODY') {
         completePath.push({
           step: stepCounter++,
           type: 'CUSTODY',
-          timestamp: custodyEvent.args.timestamp,
+          timestamp: event.timestamp,
           data: {
             assetId: currentAssetId,
-            location: custodyEvent.args.newLocation,
-            amount: assetDetails.amount,
-            previousOwner: custodyEvent.args.previousOwner,
-            newOwner: custodyEvent.args.newOwner
+            location: event.newLocation,
+            amount: genealogyState.amount,
+            previousOwner: event.previousOwner,
+            newOwner: event.newOwner
           }
         });
-      }
-      
-      // Find state changes for this asset
-      const assetStateChanges = this.cache.getStateEvents()
-        .filter(e => e.args.assetId === currentAssetId)
-        .sort((a, b) => Number(a.args.timestamp) - Number(b.args.timestamp));
-        
-      for (const stateEvent of assetStateChanges) {
+      } else if (event.type === 'STATE') {
         completePath.push({
           step: stepCounter++,
-          type: 'STATE',
-          timestamp: stateEvent.args.timestamp,
+          type: 'STATE', 
+          timestamp: event.timestamp,
           data: {
             assetId: currentAssetId,
-            location: stateEvent.args.newLocation,
-            amount: Number(stateEvent.args.newAmount),
-            previousLocation: stateEvent.args.previousLocation
+            location: event.newLocation,
+            amount: event.newAmount || genealogyState.amount,
+            previousLocation: event.previousLocation
           }
         });
       }
     }
-
-    // 3. Build summary
-    const summary = this.buildPathSummary(completePath, genealogyPath);
-    const origins = await this.findOrigins(assetId);
-
-    console.log(`          🎯 Caminho completo construído com ${completePath.length} etapas`);
-
-    return {
-      assetId,
-      totalSteps: completePath.length,
-      origins: origins.origins.map(o => o.assetId),
-      genealogyDepth: genealogyPath.length,
-      path: completePath,
-      summary
-    };
   }
 
-  private buildPathSummary(path: TraceabilityStep[], genealogyPath: string[]): any {
-    const transfers = path.filter(s => s.type === 'CUSTODY').length;
-    const stateChanges = path.filter(s => s.type === 'STATE').length;
-    const transformations = genealogyPath.length - 1; // genealogy steps minus origin
+  // Build summary
+  const summary = this.buildPathSummary(completePath, genealogyPath);
+  const origins = await this.findOrigins(assetId);
 
-    const summary = {
-      totalTransfers: transfers,
-      totalStateChanges: stateChanges,
-      totalTransformations: transformations
-    };
+  return {
+    assetId,
+    totalSteps: completePath.length,
+    origins: origins.origins.map(o => o.assetId),
+    genealogyDepth: genealogyPath.length,
+    path: completePath,
+    summary
+  };
+}
 
-    // Calculate mass loss if possible
-    const originStep = path.find(s => s.type === 'ORIGIN');
-    const lastStep = path[path.length - 1];
+  // New method: Build chronological timeline for specific asset
+  private async buildChronologicalEventTimeline(assetId: string): Promise<any[]> {
+    const events: any[] = [];
     
-    if (originStep && lastStep && originStep.data.amount !== lastStep.data.amount) {
-      const initial = originStep.data.amount;
-      const final = lastStep.data.amount;
-      
+    // Get custody events
+    const custodyEvents = this.cache.getCustodyEvents()
+      .filter(e => e.args.assetId === assetId)
+      .map(e => ({
+        type: 'CUSTODY',
+        timestamp: Number(e.args.timestamp),
+        previousOwner: e.args.previousOwner,
+        newOwner: e.args.newOwner,
+        newLocation: e.args.newLocation,
+        assetId: e.args.assetId
+      }));
+    
+    // Get state events  
+    const stateEvents = this.cache.getStateEvents()
+      .filter(e => e.args.assetId === assetId)
+      .map(e => ({
+        type: 'STATE',
+        timestamp: Number(e.args.timestamp),
+        previousLocation: e.args.previousLocation,
+        newLocation: e.args.newLocation,
+        previousAmount: Number(e.args.previousAmount) || undefined,
+        newAmount: Number(e.args.newAmount) || undefined,
+        assetId: e.args.assetId
+      }));
+    
+    // Combine and sort chronologically
+    events.push(...custodyEvents, ...stateEvents);
+    events.sort((a, b) => a.timestamp - b.timestamp);
+    
+    return events;
+  }
+
+  // Fixed method: Get asset state at creation (not current state reversed)
+  private async getAssetStateAtCreation(assetId: string): Promise<any> {
+    const asset = await this.assetRegistry.getAsset(this.channelName, assetId);
+    
+    // For genealogy assets, find their creation state from events
+    const allEvents = await this.buildChronologicalEventTimeline(assetId);
+    
+    if (allEvents.length === 0) {
+      // No changes, return current state
       return {
-        ...summary,
-        massLoss: {
-          initial,
-          final,
-          lossPercentage: ((initial - final) / initial) * 100
-        }
+        location: asset.idLocal,
+        amount: Number(asset.amount),
+        owner: asset.owner
       };
     }
-
-    return summary;
+    
+    // Start with current state and work backwards to creation state
+    let creationState = {
+      location: asset.idLocal,
+      amount: Number(asset.amount),
+      owner: asset.owner
+    };
+    
+    // Reverse events to get creation state
+    for (let i = allEvents.length - 1; i >= 0; i--) {
+      const event = allEvents[i];
+      
+      if (event.type === 'CUSTODY') {
+        // If this was the last custody change, the previous owner was the creation owner
+        if (i === allEvents.findIndex(e => e.type === 'CUSTODY')) {
+          creationState.owner = event.previousOwner;
+        }
+      }
+      
+      if (event.type === 'STATE') {
+        // If this was the last state change, use previous values
+        if (i === allEvents.findIndex(e => e.type === 'STATE')) {
+          creationState.location = event.previousLocation;
+          if (event.previousAmount) {
+            creationState.amount = event.previousAmount;
+          }
+        }
+      }
+    }
+    
+    return creationState;
   }
+
+
+  // Enhanced summary building that accounts for inherited operations
+private buildPathSummary(path: TraceabilityStep[], genealogyPath: string[]): any {
+  const transfers = path.filter(s => s.type === 'CUSTODY').length;
+  const stateChanges = path.filter(s => s.type === 'STATE').length;
+  const transformations = genealogyPath.length - 1; // genealogy steps minus origin
+  
+  // Count operations by asset to show inheritance clearly
+  const assetOperations = new Map<string, number>();
+  path.forEach(step => {
+    const count = assetOperations.get(step.data.assetId) || 0;
+    assetOperations.set(step.data.assetId, count + 1);
+  });
+
+  const summary = {
+    totalTransfers: transfers,
+    totalStateChanges: stateChanges,
+    totalTransformations: transformations,
+    assetsInChain: genealogyPath.length,
+    operationsByAsset: Object.fromEntries(assetOperations)
+  };
+
+  // Calculate mass loss across entire chain
+  const originStep = path.find(s => s.type === 'ORIGIN');
+  const lastStep = path[path.length - 1];
+  
+  if (originStep && lastStep && originStep.data.amount !== lastStep.data.amount) {
+    const initial = originStep.data.amount;
+    const final = lastStep.data.amount;
+    
+    return {
+      ...summary,
+      massLoss: {
+        initial,
+        final,
+        lossPercentage: ((initial - final) / initial) * 100,
+        totalLoss: initial - final
+      }
+    };
+  }
+
+  return summary;
+}
 
   private async getOrBuildLineageMaps(): Promise<{ lineageMap: Map<string, any[]>, reverseLineageMap: Map<string, any[]> }> {
     // Check cache first
@@ -459,62 +549,152 @@ export class SupplyChainTracer {
     
     const steps: AssetStep[] = [];
     
-    for (const step of path.path) {
-        const asset = await this.assetRegistry.getAsset(this.channelName, step.data.assetId);
-        
-        const assetStep: AssetStep = {
-            stepNumber: step.step,
-            stepType: step.type,
-            asset: {
-                assetId: asset.assetId,
-                owner: asset.owner,
-                amount: Number(asset.amount),
-                idLocal: asset.idLocal,
-                status: Number(asset.status),
-                operation: Number(asset.operation),
-                createdAt: Number(asset.createdAt),
-                lastUpdated: Number(asset.lastUpdated)
-            },
-            operation: this.getStepOperation(step.type, step.data, Number(asset.operation)),
-            timestamp: step.timestamp
-        };
-
-        // Add context based on step type
-        if (step.type === 'CUSTODY' && step.data.previousOwner) {
-            assetStep.custodyChange = {
-                previousOwner: step.data.previousOwner,
-                newOwner: step.data.newOwner ?? '',
-                location: step.data.location
-            };
-        }
-
-        if (step.type === 'STATE' && step.data.previousLocation) {
-            assetStep.stateChange = {
-                previousLocation: step.data.previousLocation,
-                newLocation: step.data.location,
-                //previousAmount: step.data.previousAmount,
-                //newAmount: step.data.newAmount
-            };
-        }
-
-        steps.push(assetStep);
-    }
+    // Build asset state timeline to get correct state for each step
+    const assetTimeline = await this.buildAssetStateTimeline(assetId);
     
-    const result: DetailedAssetPath = {
-        assetId,
-        totalSteps: steps.length,
-        origins: origins.origins.length,
-        initialAmount: steps[0]?.asset.amount || 0,
-        finalAmount: steps[steps.length - 1]?.asset.amount || 0,
-        lossPercentage: this.calculateLossPercentage(
-        steps[0]?.asset.amount || 0, 
-        steps[steps.length - 1]?.asset.amount || 0
-        ),
-        steps
-    };
+    for (const step of path.path) {
+      // Find the correct asset state for this step
+      const stepState = this.findAssetStateForStep(step, assetTimeline);
+      
+      const assetStep: AssetStep = {
+        stepNumber: step.step,
+        stepType: step.type,
+        asset: {
+          assetId: step.data.assetId,
+          owner: stepState.owner,
+          amount: step.data.amount,
+          idLocal: step.data.location,
+          status: stepState.status,
+          operation: stepState.operation,
+          createdAt: stepState.createdAt || 0,
+          lastUpdated: stepState.lastUpdated || 0
+        },
+        operation: this.getStepOperation(step.type, step.data, stepState.operation),
+        timestamp: step.timestamp
+      };
 
-    return result;
+      // Add context based on step type
+      if (step.type === 'CUSTODY' && step.data.previousOwner) {
+        assetStep.custodyChange = {
+          previousOwner: step.data.previousOwner,
+          newOwner: step.data.newOwner ?? '',
+          location: step.data.location
+        };
+      }
+
+      if (step.type === 'STATE' && step.data.previousLocation) {
+        assetStep.stateChange = {
+          previousLocation: step.data.previousLocation,
+          newLocation: step.data.location,
+        };
+      }
+
+      steps.push(assetStep);
   }
+  
+  const result: DetailedAssetPath = {
+    assetId,
+    totalSteps: steps.length,
+    origins: origins.origins.length,
+    initialAmount: steps[0]?.asset.amount || 0,
+    finalAmount: steps[steps.length - 1]?.asset.amount || 0,
+    lossPercentage: this.calculateLossPercentage(
+      steps[0]?.asset.amount || 0, 
+      steps[steps.length - 1]?.asset.amount || 0
+    ),
+    steps
+  };
+
+  return result;
+  }
+
+// Enhanced method to build asset state timeline that considers parent inheritance
+private async buildAssetStateTimeline(assetId: string): Promise<any[]> {
+  const timeline: any[] = [];
+  const currentAsset = await this.assetRegistry.getAsset(this.channelName, assetId);
+  
+  // Get genealogical path to understand inheritance
+  const genealogyPath = await this.traceGenealogyToOrigin(assetId);
+  
+  // Build timeline for each asset in genealogy
+  for (let i = 0; i < genealogyPath.length; i++) {
+    const pathAssetId = genealogyPath[i];
+    const asset = await this.assetRegistry.getAsset(this.channelName, pathAssetId);
+    const events = await this.buildChronologicalEventTimeline(pathAssetId);
+    
+    // Start with creation state for this asset
+    let currentState = await this.getAssetStateAtCreation(pathAssetId);
+    const baseAssetInfo = {
+      status: Number(asset.status),
+      operation: i === 0 ? 0 : this.detectOriginalOperation(pathAssetId), // CREATE for origin, detect for others
+      createdAt: Number(asset.createdAt),
+      lastUpdated: Number(asset.createdAt)
+    };
+    
+    timeline.push({
+      timestamp: Number(asset.createdAt),
+      assetId: pathAssetId,
+      ...currentState,
+      ...baseAssetInfo
+    });
+    
+    // Apply events chronologically for this asset
+    for (const event of events) {
+      if (event.type === 'CUSTODY') {
+        currentState = {
+          ...currentState,
+          owner: event.newOwner
+        };
+      } else if (event.type === 'STATE') {
+        currentState = {
+          ...currentState,
+          location: event.newLocation,
+          amount: event.newAmount || currentState.amount
+        };
+      }
+      
+      timeline.push({
+        timestamp: event.timestamp,
+        assetId: pathAssetId,
+        ...currentState,
+        status: Number(asset.status),
+        operation: 2, // TRANSFER for events
+        createdAt: Number(asset.createdAt),
+        lastUpdated: event.timestamp
+      });
+    }
+  }
+  
+  // Sort timeline by timestamp to maintain chronological order across assets
+  timeline.sort((a, b) => a.timestamp - b.timestamp);
+  
+  return timeline;
+}
+
+// Enhanced findAssetStateForStep to handle cross-asset inheritance
+private findAssetStateForStep(step: TraceabilityStep, timeline: any[]): any {
+  if (!step.timestamp) {
+    // For genealogy/origin steps, find the state for that specific asset
+    const assetStates = timeline.filter(state => state.assetId === step.data.assetId);
+    return assetStates[0] || timeline[0];
+  }
+  
+  // Find the state at or before this step's timestamp for the correct asset
+  const assetStates = timeline.filter(state => 
+    state.assetId === step.data.assetId && 
+    state.timestamp <= (step?.timestamp ?? 0) 
+  );
+  
+  if (assetStates.length > 0) {
+    return assetStates[assetStates.length - 1]; // Latest state before timestamp
+  }
+  
+  // Fallback: find any state for this asset
+  const anyAssetState = timeline.find(state => state.assetId === step.data.assetId);
+  return anyAssetState || timeline[0];
+}
+
+
   
   // Display methods
   displayDetailedPathJSON(detailedPath: DetailedAssetPath): void {
@@ -635,5 +815,151 @@ export class SupplyChainTracer {
   private calculateLossPercentage(initial: number, final: number): number {
     if (initial === 0) return 0;
     return ((initial - final) / initial) * 100;
+  }
+
+  //Get asset state at creation time
+  private async getAssetCreationState(assetId: string): Promise<any> {
+    const asset = await this.assetRegistry.getAsset(this.channelName, assetId);
+    
+    // For origin assets, try to reconstruct the original state
+    // by reversing any custody/state changes
+    const custodyChanges = this.cache.getCustodyEvents()
+      .filter(e => e.args.assetId === assetId)
+      .sort((a, b) => Number(a.args.timestamp) - Number(b.args.timestamp));
+    
+    const stateChanges = this.cache.getStateEvents()
+      .filter(e => e.args.assetId === assetId)
+      .sort((a, b) => Number(a.args.timestamp) - Number(b.args.timestamp));
+    
+    // Start with current state and reverse changes
+    let historicalOwner = asset.owner;
+    let historicalLocation = asset.idLocal;
+    let historicalAmount = Number(asset.amount);
+    
+    // Reverse custody changes to get original owner
+    if (custodyChanges.length > 0) {
+      historicalOwner = custodyChanges[0].args.previousOwner;
+    }
+    
+    // Reverse state changes to get original location
+    if (stateChanges.length > 0) {
+      historicalLocation = stateChanges[0].args.previousLocation;
+      if (stateChanges[0].args.previousAmount && Number(stateChanges[0].args.previousAmount) > 0) {
+        historicalAmount = Number(stateChanges[0].args.previousAmount);
+      }
+    }
+    
+    return {
+      id: assetId,
+      owner: historicalOwner,
+      amount: historicalAmount,
+      location: historicalLocation,
+      status: Number(asset.status),
+      operation: Number(asset.operation)
+    };
+  }
+
+  //Get asset state at creation time for genealogy assets
+  private async getAssetAtCreationTime(assetId: string): Promise<any> {
+    const asset = await this.assetRegistry.getAsset(this.channelName, assetId);
+    
+    // For genealogy assets, get the state at creation by looking at lineage events
+    const lineageEvent = this.cache.getLineageEvents()
+      .find(e => e.args.childAssetId === assetId);
+    
+    if (lineageEvent) {
+      // Find the first custody/state change after creation
+      const custodyChanges = this.cache.getCustodyEvents()
+        .filter(e => e.args.assetId === assetId)
+        .sort((a, b) => Number(a.args.timestamp) - Number(b.args.timestamp));
+      
+      const stateChanges = this.cache.getStateEvents()
+        .filter(e => e.args.assetId === assetId)
+        .sort((a, b) => Number(a.args.timestamp) - Number(b.args.timestamp));
+      
+      // If there are changes, get the "before" state from first change
+      if (custodyChanges.length > 0 || stateChanges.length > 0) {
+        const originalOwner = custodyChanges.length > 0 
+          ? custodyChanges[0].args.previousOwner 
+          : asset.owner;
+        
+        const originalLocation = stateChanges.length > 0 
+          ? stateChanges[0].args.previousLocation 
+          : asset.idLocal;
+        
+        const originalAmount = stateChanges.length > 0 && stateChanges[0].args.previousAmount
+          ? Number(stateChanges[0].args.previousAmount)
+          : Number(asset.amount);
+        
+        return {
+          id: assetId,
+          owner: originalOwner,
+          amount: originalAmount,
+          location: originalLocation,
+          status: Number(asset.status),
+          operation: Number(asset.operation)
+        };
+      }
+    }
+    
+    // If no changes found, return current state
+    return await this.getAssetDetails(assetId);
+  }
+
+  private async getStepAssetDetails(step: TraceabilityStep): Promise<any> {
+    // For genealogy steps, try to get historical state
+    if (step.type === 'GENEALOGY') {
+      // Try to get asset state before any transfers/updates
+      const custodyChanges = this.cache.getCustodyEvents()
+        .filter(e => e.args.assetId === step.data.assetId)
+        .sort((a, b) => Number(a.args.timestamp) - Number(b.args.timestamp));
+      
+      if (custodyChanges.length > 0) {
+        // Return state before first custody change
+        const asset = await this.assetRegistry.getAsset(this.channelName, step.data.assetId);
+        return {
+          owner: custodyChanges[0].args.previousOwner,
+          status: Number(asset.status),
+          operation: this.detectOriginalOperation(step.data.assetId),
+          createdAt: Number(asset.createdAt),
+          lastUpdated: Number(asset.createdAt) // Use creation time for genealogy
+        };
+      }
+    }
+    
+    // For other steps or if no historical data, get current asset state
+    const asset = await this.assetRegistry.getAsset(this.channelName, step.data.assetId);
+    return {
+      owner: asset.owner,
+      status: Number(asset.status),
+      operation: Number(asset.operation),
+      createdAt: Number(asset.createdAt),
+      lastUpdated: Number(asset.lastUpdated)
+    };
+  }
+
+  //Detect original operation for genealogy assets
+  private detectOriginalOperation(assetId: string): number {
+    const lineageEvent = this.cache.getLineageEvents()
+      .find(e => e.args.childAssetId === assetId);
+    
+    if (lineageEvent) {
+      const relType = Number(lineageEvent.args.relationshipType);
+      if (relType === 0) return 4; // SPLIT
+      if (relType === 1) return 7; // TRANSFORM
+      if (relType === 2) return 5; // GROUP
+    }
+    
+    return 0; // CREATE (fallback)
+  }
+
+  private async getHistoricalAssetState(assetId: string, stepIndex: number, genealogyPath: string[]): Promise<any> {
+    if (stepIndex === 0) {
+      // For origin assets, always get the creation state
+      return await this.getAssetCreationState(assetId);
+    }
+    
+    // For genealogy assets, get state at the time of their creation (before any transfers/updates)
+    return await this.getAssetAtCreationTime(assetId);
   }
 }
