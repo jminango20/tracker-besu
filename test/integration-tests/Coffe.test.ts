@@ -6,7 +6,7 @@ import { deployTransactionOrchestrator } from "../fixture/deployTransactionOrche
 import { getTestAccounts } from "../utils/index";
 import { SupplyChainTracer } from "../utils/SupplyChainTracer";
 
-describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () {
+describe("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", function () {
 
   //ACTORS
   let deployer: HardhatEthersSigner;
