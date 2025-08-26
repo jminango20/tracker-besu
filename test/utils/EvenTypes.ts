@@ -60,7 +60,9 @@ export interface RelationshipEvent {
   };
 }
 
-// Output Types
+/**
+ * Core traceability step structure
+ */
 export interface TraceabilityStep {
   step: number;
   type: 'ORIGIN' | 'GENEALOGY' | 'CUSTODY' | 'STATE';
@@ -76,6 +78,9 @@ export interface TraceabilityStep {
   };
 }
 
+/**
+ * Complete traceability path with metadata
+ */
 export interface CompleteTraceabilityPath {
   assetId: string;
   totalSteps: number;
@@ -86,14 +91,20 @@ export interface CompleteTraceabilityPath {
     totalTransfers: number;
     totalStateChanges: number;
     totalTransformations: number;
+    assetsInChain: number;
+    operationsByAsset: Record<string, number>;
     massLoss?: {
       initial: number;
       final: number;
       lossPercentage: number;
+      totalLoss: number;
     };
   };
 }
 
+/**
+ * Asset composition analysis for blended products
+ */
 export interface AssetComposition {
   assetId: string;
   componentCount: number;
@@ -108,6 +119,9 @@ export interface AssetComposition {
   timestamp: number;
 }
 
+/**
+ * Origin traceability data
+ */
 export interface AssetOrigins {
   assetId: string;
   origins: {
@@ -119,6 +133,9 @@ export interface AssetOrigins {
   totalOrigins: number;
 }
 
+/**
+ * Detailed step information with full asset context
+ */
 export interface AssetStep {
   stepNumber: number;
   stepType: 'ORIGIN' | 'GENEALOGY' | 'CUSTODY' | 'STATE';
@@ -147,6 +164,9 @@ export interface AssetStep {
   };
 }
 
+/**
+ * Complete asset path analysis with metrics
+ */
 export interface DetailedAssetPath {
   assetId: string;
   totalSteps: number;

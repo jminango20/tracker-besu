@@ -10,7 +10,11 @@ import {
   AssetOrigins
 } from './EvenTypes';
 
+/**
+ * Cache management for supply chain traceability events and computed results
+ */
 export class TraceabilityCache {
+  //Event storage
   private lineageEvents: LineageEvent[] = [];
   private custodyEvents: CustodyEvent[] = [];
   private stateEvents: StateEvent[] = [];
@@ -56,7 +60,7 @@ export class TraceabilityCache {
     this.relationshipEvents.push(...events);
   }
 
-  // Getters
+  // Event retrieval methods
   getLineageEvents(): LineageEvent[] {
     return this.lineageEvents;
   }

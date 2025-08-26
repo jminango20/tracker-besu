@@ -58,21 +58,21 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
   let loteBlend: string;
   let massaTotal: number = 1000; // kg inicial
 
-  //HELPER FUNCTIONS
-  async function logPhase(phase: string, details: any) {
-    console.log(`\n  ${phase}`);
-    console.log(`     Timestamp: ${new Date().toISOString()}`);
+  //UTILITY FUNCTIONS
+  async function logPhase(phaseName: string, details: any) {
+    console.log(`\n  ${phaseName}`);
+    console.log(`Timestamp: ${new Date().toISOString()}`);
     if (details.massa) console.log(`      Massa: ${details.massa}kg`);
     if (details.local) console.log(`      Local: ${details.local}`);
     if (details.owner) console.log(`      Proprietário: ${details.owner}`);
     if (details.gasUsed) console.log(`      Gas Used: ${details.gasUsed.toLocaleString()}`);
   }
 
-  async function validateMassConservation(expectedMass: number, actualMass: number, tolerance: number = 0) {
-    const difference = Math.abs(expectedMass - actualMass);
+  async function validateMassConservation(expected: number, actual: number, tolerance: number = 0) {
+    const difference = Math.abs(expected - actual);
     expect(difference).to.be.lte(tolerance, 
-      `❌ CONSERVAÇÃO DE MASSA VIOLADA! Esperado: ${expectedMass}kg, Atual: ${actualMass}kg`);
-    console.log(`      Conservação de massa validada: ${actualMass}kg`);
+      `CONSERVAÇÃO DE MASSA VIOLADA! Esperado: ${expected}kg, Atual: ${actual}kg`);
+    console.log(`Conservação de massa validada: ${actual}kg`);
   }
 
   async function getAssetDetails(assetId: string) {
@@ -87,7 +87,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     };
   }
 
-  it("COMPLETE COFFEE SUPPLY CHAIN", async function () {    
+  it("Complete Coffee Supply Chain Journey", async function () {    
     // ================================
     // FASE 0: SETUP INICIAL COMPLETO
     // ================================
@@ -204,14 +204,14 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     await tracer.captureAllEventsFromTransaction(receiptPlantio);
 
     // Extract asset ID from events
-    const eventPlantio = receiptPlantio?.logs.find((log: any) => {
+    const operationEvent = receiptPlantio?.logs.find((log: any) => {
       try {
         const parsed = transactionOrchestrator.interface.parseLog(log);
         return parsed?.name === "OperationExecuted";
       } catch { return false; }
     });
-    const parsedEventPlantio = transactionOrchestrator.interface.parseLog(eventPlantio);
-    assetOriginalId = parsedEventPlantio?.args.affectedAssets[0];
+    const parsedOperation = transactionOrchestrator.interface.parseLog(operationEvent);
+    assetOriginalId = parsedOperation?.args.affectedAssets[0];
 
     // Validate plantio
     const assetPlantio = await getAssetDetails(assetOriginalId);
@@ -592,18 +592,17 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
     // ================================
     console.log("\n ============================================================");    
     await logPhase("🔍 FASE 7: AUDITORIA ENHANCED - API LIMPA", {
-      //massa: assetBlend.amount,
       local: "Verificação end-to-end com biblioteca"
     });
 
-    // 7.1 - Stats da biblioteca
+    // Event capture statistics
     console.log("\n   📊 ESTATÍSTICAS DOS EVENTOS:");
-    const stats = tracer.getCacheStats();
-    console.log(`      Total eventos capturados: ${Object.values(stats.events).reduce((a: number, b: unknown) => a + (b as number), 0)}`);
-    console.log(`      Cache hits: ${stats.cache.paths} caminhos, ${stats.cache.origins} origens`);
-
-    // 7.2 - Rastreabilidade usando API limpa
-    console.log("\n   🔍 RASTREABILIDADE ENHANCED:");
+    const eventStats = tracer.getCacheStats();
+    console.log(`      Total eventos capturados: ${Object.values(eventStats.events).reduce((a: number, b: unknown) => a + (b as number), 0)}`);
+    console.log(`      Cache hits: ${eventStats.cache.paths} caminhos, ${eventStats.cache.origins} origens`);
+   
+    // Traceability analysis
+    console.log("\n   🔍 RASTREABILIDADE COMPLETA:");
     const composition = await tracer.getComposition(loteBlend);
 
     if (composition) {
@@ -613,7 +612,7 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
         const component = composition.components[i];
         console.log(`     └─ Componente ${i + 1}: ${component.amount}kg (${component.percentage.toFixed(1)}%) - ${component.location}`);
         
-        // Caminho completo usando API
+        // Complete traceability path
         const fullPath = await tracer.getCompleteTraceabilityPath(component.assetId);
         console.log(`          Caminho: ${fullPath.totalSteps} etapas (${fullPath.genealogyDepth} genealógicas)`);
         console.log(`          Origem: ${fullPath.origins.length} origem(s)`);
@@ -624,19 +623,28 @@ describe.only("COFFEE SUPPLY CHAIN - Complete Journey Integration Test", functio
       }
     }
   
-
-    // AQUI
+    // Detailed path analysis
+    console.log("\nDetailed Path Analysis:");
     const detailedPath = await tracer.getDetailedAssetPath(loteBlend);
 
-    console.log('\n   Asset Path Details:');
+    console.log('\nComplete Asset Path JSON:');
     tracer.displayDetailedPathJSON(detailedPath);
 
-    // Ou formato tabular:
+    // Formatted table output
+    console.log('\nAsset Lifecycle Table:');
     console.log('\n   Step | Type      | Amount | Location              | Owner    | Operation');
-    console.log('   -----|-----------|--------|----------------------|----------|----------');
+    console.log('   -----|-----------|--------|-----------------------|----------|----------');
     detailedPath.steps.forEach(step => {
       console.log(`   ${step.stepNumber.toString().padEnd(4)} | ${step.stepType.padEnd(9)} | ${step.asset.amount.toString().padEnd(6)} | ${step.asset.idLocal.padEnd(20)} | ${step.asset.owner.substring(0, 8)} | ${step.operation}`);
     });
+
+    console.log("\nCritical System Validations:");
+    
+    expect(assetBlend.status).to.equal(0, "Final blend deve estar ativo");
+    expect(assetBlend.amount).to.equal(380, "Massa do blend deve ser 380kg");
+    expect(assetOriginalAposColheita.status).to.equal(1, "Asset original deve estar inativo");
+    expect(assetBeneficiado.owner).to.equal(beneficiadora.address, "Asset beneficiado deve pertencer ao beneficiador");
+
 
     console.log("\n   ✅ RASTREABILIDADE COMPLETA VALIDADA COM API ENHANCED!");   
   });
