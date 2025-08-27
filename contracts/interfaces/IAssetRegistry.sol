@@ -38,11 +38,13 @@ interface IAssetRegistry {
     struct Asset {
         bytes32 assetId;              // Unique sequential asset ID
         address owner;                // Current owner
+        string location;              // Physical location
         uint256 amount;               // Physical quantity
-        string idLocal;               // Physical location
-        bytes32[] dataHashes;         // Hashes of sensitive data
+        bytes32 dataHash;             // Hash of sensitive data
+        
         AssetStatus status;           // Current status
         AssetOperation operation;     // Operation performed
+        
         uint256 createdAt;            // Creation timestamp
         uint256 lastUpdated;          // Last update timestamp
         
@@ -52,11 +54,11 @@ interface IAssetRegistry {
         
         // Transfer tracking
         address originOwner;          // Original owner (for transfer operations)
-        string[] externalIds;         // External system references
+        string externalId;            // External system references
 
         //Transformation tracking
         bytes32 parentAssetId;      // Asset that was transformed (0x0 if original)
-        string transformationId;    // Transformation ID ("" if original)
+        bytes32 transformationId;    // Transformation ID ("" if original)
         bytes32[] childAssets;      // Assets that were transformed from the original (parentAssetId)
     }
 
@@ -66,10 +68,10 @@ interface IAssetRegistry {
     struct CreateAssetInput {
         bytes32 assetId;              // Asset identifier
         bytes32 channelName;          // Channel for permissions
+        string location;              // Initial location
         uint256 amount;               // Initial amount
-        string idLocal;               // Initial location
-        bytes32[] dataHashes;         // Hashes of schema data
-        string[] externalIds;         // External references (optional)
+        bytes32 dataHash;             // Hashes of schema data
+        string externalId;            // External references (optional)
     }
 
     /**
@@ -78,9 +80,9 @@ interface IAssetRegistry {
     struct UpdateAssetInput {
         bytes32 assetId;              // Asset to update
         bytes32 channelName;          // Channel for permissions
-        string idLocal;               // New location
-        uint256 amount;               // New amount (optional)
-        bytes32[] dataHashes;         // New data hashes
+        string newLocation;          // New location
+        uint256 newAmount;           // New amount (optional)
+        bytes32 dataHash;            // New data hash
     }
 
     /**
@@ -90,9 +92,10 @@ interface IAssetRegistry {
         bytes32 assetId;              // Asset to transfer
         bytes32 channelName;          // Channel for permissions
         address newOwner;             // New owner address
-        string idLocal;               // New location (optional)
-        bytes32[] dataHashes;         // Additional data hashes
-        string[] externalIds;         // External tracking IDs
+        string newLocation;           // New location (optional)
+        uint256 newAmount;            // New amount (optional)
+        bytes32 dataHash;             // Additional data hash
+        string externalId;            // External tracking ID
     }
 
     /**
@@ -100,11 +103,10 @@ interface IAssetRegistry {
      */
     struct TransformAssetInput {
         bytes32 assetId;              // Asset to transform
-        string transformationId;      // Transformation ID for tracking free form data (eg. "BEEF-PROCESSING")
+        bytes32 newAssetId;           // Transformation ID for tracking free form data (eg. "BEEF-PROCESSING")
         bytes32 channelName;          // Channel for permissions
-        uint256 amount;               // Amount for new asset
-        string idLocal;               // Location for new asset
-        bytes32[] dataHashes;         // Data for new asset
+        string newLocation;           // Location for new asset
+        uint256 newAmount;            // Amount for new asset
     }
 
     /**
@@ -114,7 +116,7 @@ interface IAssetRegistry {
         bytes32 assetId;              // Asset to split
         bytes32 channelName;          // Channel for permissions
         uint256[] amounts;            // Amounts for each new asset
-        string idLocal;               // Location for new assets
+        string location;              // Location for new assets
         bytes32[] dataHashes;         // A data hash for each new asset
     }
 
@@ -125,8 +127,8 @@ interface IAssetRegistry {
         bytes32[] assetIds;           // Assets to group
         bytes32 groupAssetId;         // Group identifier
         bytes32 channelName;          // Channel for permissions
-        string idLocal;               // Location for group asset
-        bytes32[] dataHashes;         // Data for group asset
+        string location;              // Location for group asset
+        bytes32 dataHash;             // Data hash
     }
 
     /**
@@ -135,7 +137,7 @@ interface IAssetRegistry {
     struct UngroupAssetsInput {
         bytes32 assetId;           // Group asset to ungroup
         bytes32 channelName;       // Channel permissions
-        string idLocal;            // New location (empty = no change)
+        string location;            // New location (empty = no change)
         bytes32 dataHash;          // Single hash for all ungrouped assets
     }
 
@@ -200,8 +202,8 @@ interface IAssetRegistry {
         bytes32 indexed channelName,
         bytes32 indexed assetId,
         address indexed owner,
+        string location,
         uint256 amount,
-        string idLocal,
         uint256 timestamp
     );
 
@@ -225,6 +227,7 @@ interface IAssetRegistry {
         bytes32 indexed assetId,
         address indexed fromOwner,
         address toOwner,
+        string previousLocation,
         string newLocation,
         uint256 timestamp
     );
@@ -236,7 +239,6 @@ interface IAssetRegistry {
         bytes32 indexed originalAssetId,
         bytes32 indexed newAssetId,
         address indexed owner,
-        string transformationId,
         uint256 timestamp
     );
 
@@ -379,31 +381,22 @@ interface IAssetRegistry {
     error AssetNotActive(bytes32 channelName, bytes32 assetId);
     error AssetAlreadyExists(bytes32 channelName,bytes32 assetId);
     error NotAssetOwner(bytes32 channelName, bytes32 assetId, address caller);
-    error InvalidAmount(uint256 amount);
-    error ProcessValidationFailed(bytes32 channelName, bytes32 processId);
+    error InvalidGroupAmount(uint256 amount);
     error TransferToSameOwner(bytes32 channelName, bytes32 assetId, address newOwner);
-    error EmptyDataHashes();
     error EmptyLocation();
-    error InvalidTransformationId();
     error EmptyAmountsArray();
     error ArrayLengthMismatch();
-    error TooManySplits(uint256 provided, uint256 maximum); 
     error InvalidSplitAmount(uint256 amount);
     error SplitAmountTooSmall(uint256 amount, uint256 minimum);
     error AmountConservationViolated(uint256 original, uint256 totalSplit);
     error InsufficientAssetsToGroup(uint256 provided, uint256 minimum);
-    error TooManyAssetsToGroup(uint256 provided, uint256 maximum);  
     error GroupAssetAlreadyExists(bytes32 groupAssetId);
     error DuplicateAssetsInGroup();
     error SelfReferenceInGroup(bytes32 assetId);
     error MixedOwnershipNotAllowed(address expected, address found);
-    error TooManyDataHashes(uint256 dataHashLength, uint256 maximum);
-    error TooManyExternalIds(uint256 externalIdsLength, uint256 maxExternalIds);
     error AssetNotGrouped(bytes32 assetId);
     error AssetAlreadyUngrouped(bytes32 assetId);
     error GroupedAssetNotFound(bytes32 groupAssetId, bytes32 childAssetId);
-    error AssetAlreadyInactive(bytes32 channelName, bytes32 assetId);
-    error CannotReactivateAsset(bytes32 channelName, bytes32 assetId);
     error TransformationChainTooDeep(uint256 current, uint256 maximum);
     error InsufficientSplitParts(uint256 provided, uint8 minimum);
     error TooManyAssetsForDuplicateCheck(uint256 provided, uint256 maximum);
@@ -491,64 +484,4 @@ interface IAssetRegistry {
      */
     function isAssetActive(bytes32 channelName, bytes32 assetId) 
         external view returns (bool active);
-
-    /**
-     * Get assets owned by an address
-     * @param channelName Channel name
-     * @param owner Owner address
-     * @param page Page number (1-indexed)
-     * @param pageSize Number of items per page
-     * @return assetIds Array of asset identifiers
-     * @return totalAssets Total number of assets owned
-     * @return hasNextPage True if there are more pages
-     */
-    function getAssetsByOwner(
-        bytes32 channelName,
-        address owner,
-        uint256 page,
-        uint256 pageSize
-    ) external view returns (
-        bytes32[] memory assetIds,
-        uint256 totalAssets,
-        bool hasNextPage
-    );
-
-    /**
-     * Get asset transaction history
-     * @param channelName Channel name
-     * @param assetId Asset identifier
-     * @return operations Array of operations performed
-     * @return timestamps Array of operation timestamps
-     */
-    function getAssetHistory(bytes32 channelName, bytes32 assetId) 
-        external view returns (
-            AssetOperation[] memory operations,
-            uint256[] memory timestamps
-        );
-
-    /**
-     * Get assets by status
-     * @param channelName Channel name
-     * @param status Asset status to filter by
-     * @param page Page number (1-indexed)
-     * @param pageSize Number of items per page
-     * @return assetIds Array of asset identifiers
-     * @return totalAssets Total number of assets with status
-     * @return hasNextPage True if there are more pages
-     */
-    function getAssetsByStatus(
-        bytes32 channelName,
-        AssetStatus status,
-        uint256 page,
-        uint256 pageSize
-    ) external view returns (
-        bytes32[] memory assetIds,
-        uint256 totalAssets,
-        bool hasNextPage
-    );
-
-    function getTransformationHistory(bytes32 channelName, bytes32 assetId) 
-        external view returns (
-            bytes32[] memory transformationChain
-        );
 }

@@ -48,52 +48,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     mapping(bytes32 => mapping(bytes32 => bool)) private _assetExistsByChannel;    
     
     /**
-     * Mapping to track assets by channel and owner
-     * @dev channelName => owner => assetId[]
-     */
-    mapping(bytes32 => mapping(address => bytes32[])) private _assetsByChannelAndOwner;
-
-    /**
-     * Mapping to track assets by channel and owner index
-     * @dev channelName => assetId => index
-     */
-    mapping(bytes32 => mapping(bytes32 => uint256)) private _assetIndexByChannelAndOwner;
-
-    /**
-     * Mapping to track assets by status and channel for query
-     * @dev channelName => status => assetId[]
-     */
-    mapping(bytes32 => mapping(AssetStatus => bytes32[])) private _assetsByChannelAndStatus;
-
-    /**
-     * Mapping to track assets by channel and status index
-     * @dev channelName => assetId => index
-     */
-    mapping(bytes32 => mapping(bytes32 => uint256)) private _assetIndexByChannelAndStatus;
-
-    /**
-     * Mapping to track asset operation history for traceability by channel
-     * @dev channelName => assetId => operation[]
-     */
-    mapping(bytes32 => mapping(bytes32 => AssetOperation[])) private _assetHistoryByChannel;
-
-    /**
-     * Mapping to track asset operation timestamps by channel
-     * @dev channelName => assetId => timestamp[]
-     */
-    mapping(bytes32 => mapping(bytes32 => uint256[])) private _assetHistoryTimestampsByChannel;
-
-    /**
-     * Mapping to track parent and child assets by channel - TRANSFOM ONLY
-     * @dev channelName => parentAssetId => childAssetId
-     */
-    mapping(bytes32 => mapping(bytes32 => bytes32)) private _parentAssetByChannel;
-    /**
-     * @dev channelName => childAssetId => parentAssetId
-     */
-    mapping(bytes32 => mapping(bytes32 => bytes32[])) private _childAssetsByChannel;
-
-    /**
      * Modifier to check if the caller is the transaction orchestrator
      */
     modifier onlyTransactionOrchestrator() {
@@ -103,7 +57,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
         _;
     }
-
     // =============================================================
     //                       CONSTRUCTOR
     // =============================================================
@@ -133,56 +86,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyChannelMemberAddress(input.channelName, originCaller)
     {
         _validateCreateAssetInput(input);
-
-        if (_assetExistsByChannel[input.channelName][input.assetId]) {
-            revert AssetAlreadyExists(input.channelName, input.assetId);
-        }
-
-        // Create asset structure
-        Asset storage newAsset = _assetsByChannel[input.channelName][input.assetId];
-        newAsset.assetId = input.assetId;
-        newAsset.owner = originCaller;
-        newAsset.idLocal = input.idLocal;
-        newAsset.amount = input.amount;
-        newAsset.status = AssetStatus.ACTIVE;
-        newAsset.operation = AssetOperation.CREATE;
-        newAsset.createdAt = Utils.timestamp();
-        newAsset.lastUpdated = Utils.timestamp();
-        newAsset.originOwner = originCaller;
-
-        for (uint256 i = 0; i < input.dataHashes.length; i++) { //See TODO
-            newAsset.dataHashes.push(input.dataHashes[i]);
-        }
-
-        for (uint256 i = 0; i < input.externalIds.length; i++) { //See TODO
-            newAsset.externalIds.push(input.externalIds[i]);
-        }
-
-        // Mark asset as existing
-        _assetExistsByChannel[input.channelName][input.assetId] = true;
-
-        _addAssetToOwner(input.channelName, input.assetId, originCaller);
-        _addAssetToStatus(input.channelName, input.assetId, AssetStatus.ACTIVE);
-        _addToHistory(input.channelName, input.assetId, AssetOperation.CREATE, Utils.timestamp());
-
-        // Para assets criados (origem), emitir evento de profundidade 0
-        bytes32[] memory emptyOrigins = new bytes32[](0);
-        
-        _emitDepthCalculation(
-            input.channelName,
-            input.assetId,
-            0,                       // depth 0 = origin
-            emptyOrigins            // no origins (this IS the origin)
-        );
-
-        emit AssetCreated(
-            input.channelName,
-            input.assetId,
-            originCaller,
-            input.amount,
-            input.idLocal,
-            Utils.timestamp()
-        );
+        _performAssetCreate(input, originCaller);
     }
 
     /**
@@ -194,61 +98,9 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyTransactionOrchestrator()
         validChannelName(update.channelName)
         onlyChannelMemberAddress(update.channelName, originCaller)
-    {
+    { 
         _validateUpdateAssetInput(update);
-
-        if(!_assetExistsByChannel[update.channelName][update.assetId]) {
-            revert AssetNotFound(update.channelName, update.assetId);
-        }
-
-        Asset storage asset = _assetsByChannel[update.channelName][update.assetId];
-
-        if (asset.status != AssetStatus.ACTIVE) {
-            revert AssetNotActive(update.channelName, update.assetId);
-        }
-
-        if (asset.owner != originCaller) {
-            revert NotAssetOwner(update.channelName, update.assetId, originCaller);
-        }
-
-        string memory previousLocation = asset.idLocal;
-        uint256 previousAmount = asset.amount;
-
-        asset.idLocal = update.idLocal;
-
-        if (update.amount > 0) {
-            asset.amount = update.amount;
-        }
-
-        //Replace data hashes completely See TODO
-        delete asset.dataHashes;
-        for (uint256 i = 0; i < update.dataHashes.length; i++) {
-            asset.dataHashes.push(update.dataHashes[i]);
-        }
-
-        asset.operation = AssetOperation.UPDATE;
-        asset.lastUpdated = Utils.timestamp();
-
-        _addToHistory(update.channelName, update.assetId, AssetOperation.UPDATE, Utils.timestamp());
-
-        emit AssetStateChanged(
-            update.channelName,
-            update.assetId,
-            previousLocation,
-            update.idLocal,
-            previousAmount,
-            asset.amount,
-            Utils.timestamp()
-        );
-
-        emit AssetUpdated(
-            update.channelName,
-            asset.assetId,
-            asset.owner,
-            asset.amount,
-            asset.idLocal,
-            Utils.timestamp()
-        );
+        _performAssetUpdate(update, originCaller);
     }
 
     /**
@@ -262,76 +114,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyChannelMemberAddress(transfer.channelName, originCaller)
     {
         _validateTransferAssetInput(transfer);
-
-        if(!_assetExistsByChannel[transfer.channelName][transfer.assetId]) {
-            revert AssetNotFound(transfer.channelName, transfer.assetId);
-        }
-
-        Asset storage asset = _assetsByChannel[transfer.channelName][transfer.assetId];
-
-        if (asset.status != AssetStatus.ACTIVE) {
-            revert AssetNotActive(transfer.channelName, transfer.assetId);
-        }
-
-        if (asset.owner != originCaller) {
-            revert NotAssetOwner(transfer.channelName, transfer.assetId, originCaller);
-        }
-
-        if (asset.owner == transfer.newOwner) {
-            revert TransferToSameOwner(transfer.channelName, transfer.assetId, transfer.newOwner);
-        }
-
-        ChannelAccess.requireMember(_getAddressDiscovery(), transfer.channelName, transfer.newOwner);
-
-        address previousOwner = asset.owner;
-        string memory previousLocation = asset.idLocal;
-
-        asset.owner = transfer.newOwner;    //New Owner
-        asset.idLocal = transfer.idLocal;
-        asset.operation = AssetOperation.TRANSFER;
-        asset.lastUpdated = Utils.timestamp();
-
-        //Replace externalIds completely  
-        delete asset.externalIds;
-        for (uint256 i = 0; i < transfer.externalIds.length; i++) {
-            asset.externalIds.push(transfer.externalIds[i]);
-        }
-
-        //Update owner enumeration
-        _removeAssetFromOwner(transfer.channelName, transfer.assetId, previousOwner);
-        _addAssetToOwner(transfer.channelName, transfer.assetId, transfer.newOwner);
-
-        _addToHistory(transfer.channelName, transfer.assetId, AssetOperation.TRANSFER, Utils.timestamp());
-
-        emit AssetCustodyChanged(
-            transfer.channelName,
-            transfer.assetId,
-            previousOwner,
-            transfer.newOwner,
-            previousLocation,
-            Utils.timestamp()
-        );
-
-        if (keccak256(bytes(previousLocation)) != keccak256(bytes(transfer.idLocal))) {
-            emit AssetStateChanged(
-                transfer.channelName,
-                transfer.assetId,
-                previousLocation,
-                transfer.idLocal,
-                asset.amount,
-                asset.amount,
-                Utils.timestamp()
-            );
-        }
-
-        emit AssetTransferred(
-            transfer.channelName,
-            transfer.assetId,
-            previousOwner,
-            transfer.newOwner,
-            transfer.idLocal,
-            Utils.timestamp()
-        );
+        _performAssetTransfer(transfer, originCaller);
     }
 
     /**
@@ -345,107 +128,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyChannelMemberAddress(transform.channelName, originCaller)
     {
         _validateTransformAssetInput(transform);
-
-        if(!_assetExistsByChannel[transform.channelName][transform.assetId]) {
-            revert AssetNotFound(transform.channelName, transform.assetId);
-        }
-
-        Asset storage originalAsset = _assetsByChannel[transform.channelName][transform.assetId];
-
-        if (originalAsset.status != AssetStatus.ACTIVE) {
-            revert AssetNotActive(transform.channelName, transform.assetId);
-        }
-
-        if (originalAsset.owner != originCaller) {
-            revert NotAssetOwner(transform.channelName, transform.assetId, originCaller);
-        }
-
-        uint256 currentDepth = _getTransformationDepth(transform.channelName, transform.assetId);
-        if (currentDepth + 1 > MAX_TRANSFORMATION_DEPTH) {
-            revert TransformationChainTooDeep(currentDepth + 1, MAX_TRANSFORMATION_DEPTH);
-        }
-
-        //1. Gerar novo asset ID
-        bytes32 newAssetId = _generateTransformedAssetId(
-            transform.channelName, 
-            transform.assetId, 
-            transform.transformationId
-        );
-
-        if (_assetExistsByChannel[transform.channelName][newAssetId]) {
-            revert AssetAlreadyExists(transform.channelName, newAssetId);
-        }
-
-        //2. Inativar original asset
-        _removeAssetFromOwner(transform.channelName, transform.assetId, originalAsset.owner);
-        _updateAssetInStatusEnumeration(transform.channelName, transform.assetId, AssetStatus.INACTIVE);
-        
-        originalAsset.status = AssetStatus.INACTIVE;
-        originalAsset.operation = AssetOperation.TRANSFORM;
-        originalAsset.lastUpdated = Utils.timestamp();
-
-
-        //3. Criar Novo Asset
-        Asset storage newAsset = _assetsByChannel[transform.channelName][newAssetId];
-        newAsset.assetId = newAssetId;
-        newAsset.owner = originalAsset.owner;   //Herda
-        newAsset.amount = transform.amount == 0 ? originalAsset.amount : transform.amount;
-        newAsset.idLocal = transform.idLocal;
-
-        for (uint256 i = 0; i < originalAsset.groupedAssets.length; i++) {
-            newAsset.groupedAssets.push(originalAsset.groupedAssets[i]);
-        }
-
-        newAsset.groupedBy = originalAsset.groupedBy;
-        
-        for (uint256 i = 0; i < originalAsset.externalIds.length; i++) {
-            newAsset.externalIds.push(originalAsset.externalIds[i]);
-        }
-        
-        //3.1 Novos campos de transformação do novo asset
-        newAsset.parentAssetId = transform.assetId;
-        newAsset.transformationId = transform.transformationId;
-
-        _emitLineage(
-            transform.channelName,
-            newAssetId,              // child (transformed asset)
-            transform.assetId,       // parent (original asset)
-            RelationshipType.TRANSFORM
-        );
-        
-        // Copiar dataHashes
-        for (uint256 i = 0; i < transform.dataHashes.length; i++) {
-            newAsset.dataHashes.push(transform.dataHashes[i]);
-        }
-
-        newAsset.status = AssetStatus.ACTIVE;
-        newAsset.operation = AssetOperation.TRANSFORM;
-        newAsset.createdAt = Utils.timestamp();
-        newAsset.lastUpdated = Utils.timestamp();
-        newAsset.originOwner = originalAsset.owner;
-
-        //4. Atualizar Rastreabilidade
-        _assetExistsByChannel[transform.channelName][newAssetId] = true;
-        _parentAssetByChannel[transform.channelName][newAssetId] = transform.assetId;
-        _childAssetsByChannel[transform.channelName][transform.assetId].push(newAssetId);
-
-        // Adicionar childAsset ao original
-        originalAsset.childAssets.push(newAssetId);
-
-        //5. Atualizar Mapeamentos
-        _addAssetToOwner(transform.channelName, newAssetId, newAsset.owner);
-        _addAssetToStatus(transform.channelName, newAssetId, AssetStatus.ACTIVE);
-        
-        _addToHistory(transform.channelName, transform.assetId, AssetOperation.TRANSFORM, Utils.timestamp());
-        _addToHistory(transform.channelName, newAssetId, AssetOperation.TRANSFORM, Utils.timestamp());
-
-        emit AssetTransformed(
-            transform.assetId,
-            newAssetId,
-            newAsset.owner,
-            transform.transformationId,
-            Utils.timestamp()
-        );
+        _performAssetTransform(transform, originCaller);
     }
 
     /**
@@ -457,23 +140,15 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyTransactionOrchestrator()
         validChannelName(split.channelName)
         onlyChannelMemberAddress(split.channelName, originCaller)
+        //assetExists(split.channelName, split.assetId)
+        //assetActive(split.channelName, split.assetId)
+        //onlyAssetOwner(split.channelName, split.assetId, originCaller)
     {
+        /*
         _validateSplitAssetInput(split);
-
-        if(!_assetExistsByChannel[split.channelName][split.assetId]) {
-            revert AssetNotFound(split.channelName, split.assetId);
-        }
 
         Asset storage originalAsset = _assetsByChannel[split.channelName][split.assetId];
         
-        if (originalAsset.status != AssetStatus.ACTIVE) {
-            revert AssetNotActive(split.channelName, split.assetId);
-        }
-    
-        if (originalAsset.owner != originCaller) {
-            revert NotAssetOwner(split.channelName, split.assetId, originCaller);
-        }
-
         //1. Validar conservação da quantidade (amount)
         uint256 totalSplitAmount = 0;
         for (uint256 i = 0; i < split.amounts.length; i++) {
@@ -485,9 +160,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
 
         //2. Inativar original asset
-        _removeAssetFromOwner(split.channelName, split.assetId, originalAsset.owner);
-        _updateAssetInStatusEnumeration(split.channelName, split.assetId, AssetStatus.INACTIVE);
-
         originalAsset.status = AssetStatus.INACTIVE;
         originalAsset.operation = AssetOperation.SPLIT;
         originalAsset.lastUpdated = Utils.timestamp();
@@ -508,23 +180,16 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             //PROPRIEDADES BÁSICAS
             newAsset.assetId = newAssetId;
             newAsset.owner = originalAsset.owner;           // Herda owner
-            newAsset.amount = split.amounts[i];             // Amount específico
-            newAsset.idLocal = split.idLocal;               // Nova localização
+            newAsset.amount = split.amounts[i];            // Amount específico
+            newAsset.location = split.location;            // Nova localização
             
             //DADOS INDIVIDUAIS
-            newAsset.dataHashes = new bytes32[](1);
-            newAsset.dataHashes[0] = split.dataHashes[i];
-            
-            //Não herda grouping (como Fabric)
-            newAsset.groupedBy = bytes32(0);
-            newAsset.groupedAssets = new bytes32[](0);
-            newAsset.externalIds = new string[](0);
+            newAsset.dataHash = split.dataHashes[i];
             
             //TRACKING DE SPLIT
             newAsset.parentAssetId = split.assetId;
             // transformationId personalizado para split
             newAsset.transformationId = string(abi.encodePacked("SPLIT_", _uint2str(i + 1)));
-            newAsset.childAssets = new bytes32[](0);        // Splits não têm filhos inicialmente
             
             //METADATA
             newAsset.status = AssetStatus.ACTIVE;
@@ -535,9 +200,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             
             //REGISTRAR EXISTÊNCIA E INDEXAÇÃO
             _assetExistsByChannel[split.channelName][newAssetId] = true;
-            _addAssetToOwner(split.channelName, newAssetId, newAsset.owner);
-            _addAssetToStatus(split.channelName, newAssetId, AssetStatus.ACTIVE);
-            _addToHistory(split.channelName, newAssetId, AssetOperation.SPLIT, Utils.timestamp());
             
             newAssetIds[i] = newAssetId;
 
@@ -548,9 +210,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
                 RelationshipType.SPLIT
             );
         }
-
-        //4. Atualizar Rastreabilidade
-        _addToHistory(split.channelName, split.assetId, AssetOperation.SPLIT, Utils.timestamp());
         
         //5. Adicionar child assets no original
         originalAsset.childAssets = newAssetIds;
@@ -569,6 +228,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             split.amounts,
             Utils.timestamp()
         );
+        */
     }
 
     /**
@@ -582,94 +242,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyChannelMemberAddress(group.channelName, originCaller)
     {
         _validateGroupAssetsInput(group);
-        uint256 totalAmounts = _validateAssetsAndAmountConservation(group, originCaller);
-
-        //1. Inativar assets a serem agrupados
-        for (uint256 i = 0; i < group.assetIds.length; i++) {
-            Asset storage originalAsset = _assetsByChannel[group.channelName][group.assetIds[i]];
-            
-            _removeAssetFromOwner(group.channelName, group.assetIds[i], originalAsset.owner);
-            _updateAssetInStatusEnumeration(group.channelName, group.assetIds[i], AssetStatus.INACTIVE);
-            
-            originalAsset.status = AssetStatus.INACTIVE;
-            originalAsset.operation = AssetOperation.GROUP;
-            originalAsset.groupedBy = group.groupAssetId;  
-            originalAsset.lastUpdated = Utils.timestamp();
-            
-            // Atualizar mappings
-            _addToHistory(group.channelName, group.assetIds[i], AssetOperation.GROUP, Utils.timestamp());
-        }
-
-        //2. Criar asset de agrupamento
-        Asset storage groupAsset = _assetsByChannel[group.channelName][group.groupAssetId];
-
-        groupAsset.assetId = group.groupAssetId;  // User-defined ID
-        groupAsset.owner = originCaller;           // Owner dos assets originais
-        groupAsset.amount = totalAmounts;         // Total amount (já validado conservation)
-        groupAsset.idLocal = group.idLocal;      // Nova localização do grupo
-
-        for (uint256 i = 0; i < group.dataHashes.length; i++) {
-            groupAsset.dataHashes.push(group.dataHashes[i]);
-        }
-
-        //2.1 Relacionar assets no grupo
-        for (uint256 i = 0; i < group.assetIds.length; i++) {
-            groupAsset.groupedAssets.push(group.assetIds[i]);  // REVERSE TRACKING
-
-            _emitLineage(
-                group.channelName,
-                group.groupAssetId,      // child (group asset)
-                group.assetIds[i],       // parent (component asset)
-                RelationshipType.GROUP_COMPONENT
-            );
-        }
-
-        groupAsset.groupedBy = bytes32(0);                // Grupo não está agrupado em outro (inicialmente)
-
-        groupAsset.externalIds = new string[](0);         // Grupo não herda external IDs
-        groupAsset.parentAssetId = bytes32(0);            // Não é transformation
-        groupAsset.transformationId = "";                 // Não é transformation
-        groupAsset.childAssets = new bytes32[](0);        // Grupo não tem child assets inicialmente
-
-        groupAsset.status = AssetStatus.ACTIVE;
-        groupAsset.operation = AssetOperation.GROUP;
-        groupAsset.createdAt = Utils.timestamp();
-        groupAsset.lastUpdated = Utils.timestamp();
-        groupAsset.originOwner = originCaller;
-
-        //3. Registrar existência e indexação
-        _assetExistsByChannel[group.channelName][group.groupAssetId] = true;
-        _addAssetToOwner(group.channelName, group.groupAssetId, originCaller);
-        _addAssetToStatus(group.channelName, group.groupAssetId, AssetStatus.ACTIVE);
-        _addToHistory(group.channelName, group.groupAssetId, AssetOperation.GROUP, Utils.timestamp());
-
-        _emitRelationship(
-            group.channelName,
-            group.groupAssetId,      // primary (group asset)
-            group.assetIds,          // related (component assets)
-            AssetOperation.GROUP
-        );
-
-        uint256[] memory componentAmounts = new uint256[](group.assetIds.length);
-        for (uint256 i = 0; i < group.assetIds.length; i++) {
-            Asset storage componentAsset = _assetsByChannel[group.channelName][group.assetIds[i]];
-            componentAmounts[i] = componentAsset.amount;
-        }
-        
-        _emitComposition(
-            group.channelName,
-            group.groupAssetId,
-            group.assetIds,
-            componentAmounts
-        );
-
-        emit AssetsGrouped(
-            group.assetIds,
-            group.groupAssetId,
-            originCaller,
-            totalAmounts,
-            Utils.timestamp()
-        );
+        _performAssetGroup(group, originCaller);
     }
 
     /**
@@ -680,23 +253,15 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         nonReentrant
         onlyTransactionOrchestrator()
         validChannelName(ungroup.channelName)
-        onlyChannelMemberAddress(ungroup.channelName, originCaller)    
+        onlyChannelMemberAddress(ungroup.channelName, originCaller)
+        //assetExists(ungroup.channelName, ungroup.assetId)
+        //assetActive(ungroup.channelName, ungroup.assetId)
+        //onlyAssetOwner(ungroup.channelName, ungroup.assetId, originCaller)  
     {
+        /*
         _validateUngroupAssetsInput(ungroup);
 
-        if (!_assetExistsByChannel[ungroup.channelName][ungroup.assetId]) {
-            revert AssetNotFound(ungroup.channelName, ungroup.assetId);
-        }
-
         Asset storage groupAsset = _assetsByChannel[ungroup.channelName][ungroup.assetId];
-
-        if (groupAsset.status != AssetStatus.ACTIVE) {
-            revert AssetNotActive(ungroup.channelName, ungroup.assetId);
-        }
-        
-        if (groupAsset.owner != originCaller) {
-            revert NotAssetOwner(ungroup.channelName, ungroup.assetId, originCaller);
-        }
 
         _validateCanUngroup(groupAsset);
 
@@ -715,47 +280,32 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
                         
             //1.2 Aplicar novos dados ao asset filho (se fornecidos)
             if (ungroup.dataHash != bytes32(0)) {
-                // Substituir dataHashes com novo hash
-                delete childAsset.dataHashes;
-                childAsset.dataHashes = new bytes32[](1);
-                childAsset.dataHashes[0] = ungroup.dataHash;
+                childAsset.dataHash = ungroup.dataHash;
             }
             
-            if (bytes(ungroup.idLocal).length > 0) {
-                childAsset.idLocal = ungroup.idLocal;
+            if (bytes(ungroup.location).length > 0) {
+                childAsset.location = ungroup.location;
             }
             
             //1.3 Desvincular asset filho do grupo
-            childAsset.groupedBy = bytes32(0);  // Não está mais agrupado
-            
-            //1.4 Atualizar status e history e Reativar asset filho
-            _updateAssetInStatusEnumeration(ungroup.channelName, childAssetId, AssetStatus.ACTIVE);            
-            
+            childAsset.groupedBy = bytes32(0);  // Não está mais agrupado  
             childAsset.status = AssetStatus.ACTIVE;
             childAsset.operation = AssetOperation.UNGROUP;
             childAsset.lastUpdated = Utils.timestamp();
-
-            _addAssetToOwner(ungroup.channelName, childAssetId, childAsset.owner);
-            _addToHistory(ungroup.channelName, childAssetId, AssetOperation.UNGROUP, Utils.timestamp());
         }
 
-        //2. Remove and Inactivate asset grupo
-        _removeAssetFromOwner(ungroup.channelName, ungroup.assetId, groupAsset.owner);
-        _updateAssetInStatusEnumeration(ungroup.channelName, ungroup.assetId, AssetStatus.INACTIVE);
-        
+        //2. Remove and Inactivate asset grupo   
         groupAsset.status = AssetStatus.INACTIVE;
         groupAsset.operation = AssetOperation.UNGROUP;
         groupAsset.lastUpdated = Utils.timestamp();
-        
-        //3. Atualizar status e history
-        _addToHistory(ungroup.channelName, ungroup.assetId, AssetOperation.UNGROUP, Utils.timestamp());
-        
+                
         emit AssetsUngrouped(
             ungroup.assetId,
             ungroupedAssetIds,
             groupAsset.owner,
             Utils.timestamp()
         );
+        */
     }
 
     /**
@@ -766,50 +316,10 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         nonReentrant
         onlyTransactionOrchestrator()
         validChannelName(inactivate.channelName)
-        onlyChannelMemberAddress(inactivate.channelName, originCaller)   
+        onlyChannelMemberAddress(inactivate.channelName, originCaller)
     {
         _validateInactivateAssetInput(inactivate);
-        
-        if (!_assetExistsByChannel[inactivate.channelName][inactivate.assetId]) {
-            revert AssetNotFound(inactivate.channelName, inactivate.assetId);
-        }
-        
-        Asset storage asset = _assetsByChannel[inactivate.channelName][inactivate.assetId];
-        
-        if (asset.status != AssetStatus.ACTIVE) {
-            revert AssetNotActive(inactivate.channelName, inactivate.assetId);
-        }
-        
-        if (asset.owner != originCaller) {
-            revert NotAssetOwner(inactivate.channelName, inactivate.assetId, originCaller);
-        }
-        
-        if (bytes(inactivate.finalLocation).length > 0) {
-            asset.idLocal = inactivate.finalLocation;
-        }
-        
-        if (inactivate.finalDataHash != bytes32(0)) {
-            // Substituir dataHashes com hash final
-            delete asset.dataHashes;
-            asset.dataHashes = new bytes32[](1);
-            asset.dataHashes[0] = inactivate.finalDataHash;
-        }
-        
-        _removeAssetFromOwner(inactivate.channelName, inactivate.assetId, asset.owner);
-        _updateAssetInStatusEnumeration(inactivate.channelName, inactivate.assetId, AssetStatus.INACTIVE);
-        
-        asset.status = AssetStatus.INACTIVE;
-        asset.operation = AssetOperation.INACTIVATE;
-        asset.lastUpdated = Utils.timestamp();
-        
-        _addToHistory(inactivate.channelName, inactivate.assetId, AssetOperation.INACTIVATE, Utils.timestamp());
-        
-        emit AssetInactivated(
-            inactivate.assetId,
-            asset.owner,
-            AssetOperation.INACTIVATE,
-            Utils.timestamp()
-        );
+        _performAssetInactivate(inactivate, originCaller);
     }
 
     // =============================================================
@@ -823,11 +333,9 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         external 
         view 
         validChannelName(channelName)
+        //assetExists(channelName, assetId)
         returns (Asset memory asset) 
     {
-        if (!_assetExistsByChannel[channelName][assetId]) {
-            revert AssetNotFound(channelName, assetId);
-        }
         return _assetsByChannel[channelName][assetId];
     }
 
@@ -846,153 +354,29 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         return _assetsByChannel[channelName][assetId].status == AssetStatus.ACTIVE;
     }
 
-    /**
-     * @inheritdoc IAssetRegistry
-     */
-    function getAssetHistory(bytes32 channelName, bytes32 assetId) 
-        external 
-        view 
-        returns (
-            AssetOperation[] memory operations,
-            uint256[] memory timestamps
-        ) 
-    {
-        if (!_assetExistsByChannel[channelName][assetId]) {
-            revert AssetNotFound(channelName, assetId);
-        }
-        
-        operations = _assetHistoryByChannel[channelName][assetId];
-        timestamps = _assetHistoryTimestampsByChannel[channelName][assetId];
-    }
-
-    /**
-     * @inheritdoc IAssetRegistry
-     */
-    function getTransformationHistory(bytes32 channelName, bytes32 assetId) 
-        external 
-        view 
-        returns (bytes32[] memory transformationChain) 
-    {
-        if (!_assetExistsByChannel[channelName][assetId]) {
-            revert AssetNotFound(channelName, assetId);
-        }
-        
-        return _buildTransformationChain(channelName, assetId);
-    }
-
-    /**
-     * @inheritdoc IAssetRegistry
-     */
-    function getAssetsByOwner(
-        bytes32 channelName,
-        address owner, 
-        uint256 page, 
-        uint256 pageSize
-    ) external 
-      view 
-      validChannelName(channelName)
-      validAddress(owner)
-      validPagination(page, pageSize)
-      returns (
-        bytes32[] memory assetIds, 
-        uint256 totalAssets, 
-        bool hasNextPage
-    )
-    {
-        bytes32[] storage ownerAssets = _assetsByChannelAndOwner[channelName][owner];
-        totalAssets = ownerAssets.length;
-
-        if (totalAssets == 0) {
-            return (new bytes32[](0), 0, false);
-        }
-
-        (uint256 startIndex, uint256 endIndex, uint256 totalPages, bool _hasNextPage) = _calculatePagination(totalAssets, page, pageSize);
-    
-        hasNextPage = _hasNextPage;
-
-        if (page > totalPages) {
-            return (new bytes32[](0), totalAssets, false);
-        }
-
-        uint256 resultLength = endIndex - startIndex;
-        assetIds = new bytes32[](resultLength);
-        
-        for (uint256 i = 0; i < resultLength; i++) {
-            assetIds[i] = ownerAssets[startIndex + i];
-        }
-    }
-
-    /**
-     * @inheritdoc IAssetRegistry
-     */
-    function getAssetsByStatus(
-        bytes32 channelName,
-        AssetStatus status, 
-        uint256 page, 
-        uint256 pageSize
-    ) external 
-      view
-      validChannelName(channelName)
-      validPagination(page, pageSize) 
-      returns (
-        bytes32[] memory assetIds, 
-        uint256 totalAssets, 
-        bool hasNextPage
-    ) 
-    {
-         bytes32[] storage statusAssets = _assetsByChannelAndStatus[channelName][status];
-        totalAssets = statusAssets.length;
-
-        if (totalAssets == 0) {
-            return (new bytes32[](0), 0, false);
-        }
-
-        (uint256 startIndex, uint256 endIndex, uint256 totalPages, bool _hasNextPage) = _calculatePagination(totalAssets, page, pageSize);
-        hasNextPage = _hasNextPage;
-
-        if (page > totalPages) {
-            return (new bytes32[](0), totalAssets, false);
-        }
-
-        uint256 resultLength = endIndex - startIndex;
-        assetIds = new bytes32[](resultLength);
-        
-        for (uint256 i = 0; i < resultLength; i++) {
-            assetIds[i] = statusAssets[startIndex + i];
-        }
-    }
-
-
     // =============================================================
     //                    VALIDATION FUNCTIONS
     // =============================================================
     function _validateCreateAssetInput(CreateAssetInput calldata input) internal pure {
-        _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
-        _validateExternalIds(input.externalIds);
+        _validateCommonAssetFields(input.assetId, input.channelName, input.location);
     }
 
     function _validateUpdateAssetInput(UpdateAssetInput calldata input) internal pure {
-        _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
+        _validateCommonAssetFields(input.assetId, input.channelName, input.newLocation);
     }
 
     function _validateTransferAssetInput(TransferAssetInput calldata input) internal pure {
-        _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
-        _validateExternalIds(input.externalIds);
+        _validateCommonAssetFields(input.assetId, input.channelName, input.newLocation);
         if (input.newOwner == address(0)) revert InvalidAddress(input.newOwner);
     }
 
     function _validateTransformAssetInput(TransformAssetInput calldata input) internal pure {
-        _validateCommonAssetFields(input.assetId, input.channelName, input.idLocal, input.dataHashes);
-        // Validar transformationId
-        bytes memory transformationBytes = bytes(input.transformationId);
-        if (transformationBytes.length == 0 || transformationBytes.length > 64) {
-            revert InvalidTransformationId();
-        }
+        _validateCommonAssetFields(input.assetId, input.channelName, input.newLocation);
     }
 
     function _validateSplitAssetInput(SplitAssetInput calldata input) internal pure {
         if (input.assetId == bytes32(0)) revert InvalidAssetId(input.channelName, input.assetId);
-        if (bytes(input.idLocal).length == 0) revert EmptyLocation();
+        if (bytes(input.location).length == 0) revert EmptyLocation();
         
         // Validações de arrays
         if (input.amounts.length == 0) revert EmptyAmountsArray();
@@ -1000,16 +384,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
 
         if (input.amounts.length != input.dataHashes.length) revert ArrayLengthMismatch();
         
-        // Gas protection
-        if (input.amounts.length > MAX_SPLIT_COUNT) {
-            revert TooManySplits(input.amounts.length, MAX_SPLIT_COUNT);
-        }
-        
         // Validar cada amount individual
         for (uint256 i = 0; i < input.amounts.length; i++) {
             if (input.amounts[i] == 0) {
                 revert InvalidSplitAmount(input.amounts[i]);
             }
+
             if (input.amounts[i] < MIN_SPLIT_AMOUNT) {
                 revert SplitAmountTooSmall(input.amounts[i], MIN_SPLIT_AMOUNT);
             }
@@ -1018,20 +398,12 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
 
     function _validateGroupAssetsInput(GroupAssetsInput calldata input) internal view {
         if (input.groupAssetId == bytes32(0)) revert InvalidAssetId(input.channelName, input.groupAssetId);
-        if (bytes(input.idLocal).length == 0) revert EmptyLocation();
+        if (bytes(input.location).length == 0) revert EmptyLocation();
         
         // Validações de arrays
         if (input.assetIds.length < MIN_GROUP_SIZE) {
             revert InsufficientAssetsToGroup(input.assetIds.length, MIN_GROUP_SIZE);
         }
-        if (input.assetIds.length > MAX_GROUP_SIZE) {
-            revert TooManyAssetsToGroup(input.assetIds.length, MAX_GROUP_SIZE);
-        }
-        if (input.dataHashes.length == 0) revert EmptyDataHashes();
-        if (input.dataHashes.length > MAX_GROUP_DATA_HASHES) {
-            revert TooManyDataHashes(input.dataHashes.length, MAX_GROUP_DATA_HASHES);
-        }
-        
         // Verificar que o grupo não existe
         if (_assetExistsByChannel[input.channelName][input.groupAssetId]) {
             revert GroupAssetAlreadyExists(input.groupAssetId);
@@ -1101,117 +473,356 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     function _validateCommonAssetFields(
         bytes32 assetId,
         bytes32 channelName,
-        string calldata idLocal,
-        bytes32[] calldata dataHashes
+        string calldata location
     ) internal pure {
         if (assetId == bytes32(0)) revert InvalidAssetId(channelName, assetId);
-        if (bytes(idLocal).length == 0) revert EmptyLocation();
-        if (dataHashes.length == 0) revert EmptyDataHashes();
-        if (dataHashes.length > MAX_DATA_HASHES) revert TooManyDataHashes(dataHashes.length, MAX_DATA_HASHES);
+        if (bytes(location).length == 0) revert EmptyLocation();
     }
 
-
-    function _validateExternalIds(string[] calldata externalIds) internal pure {
-        if (externalIds.length > MAX_EXTERNAL_IDS) {
-            revert TooManyExternalIds(externalIds.length, MAX_EXTERNAL_IDS);
+    function _validateAssetExists(bytes32 channelName, bytes32 assetId) internal view {
+        if (!_assetExistsByChannel[channelName][assetId]) {
+            revert AssetNotFound(channelName, assetId);
+        }  
+    }
+    
+    function _validateAssetActive(bytes32 channelName, bytes32 assetId) internal view {
+        if (_assetsByChannel[channelName][assetId].status != AssetStatus.ACTIVE) {
+            revert AssetNotActive(channelName, assetId);
+        }
+    }
+    
+    function _validateAssetOwner(bytes32 channelName, bytes32 assetId, address originCaller) internal view {
+        if (_assetsByChannel[channelName][assetId].owner != originCaller) {
+            revert NotAssetOwner(channelName, assetId, originCaller);
         }
     }
 
     // =============================================================
     //                    INTERNAL FUNCTIONS
     // =============================================================
+    function _performAssetCreate(CreateAssetInput calldata input, address originCaller) internal {
 
-    function _addAssetToOwner(bytes32 channelName, bytes32 assetId, address owner) internal {
-        uint256 index = _assetsByChannelAndOwner[channelName][owner].length;
-        _assetsByChannelAndOwner[channelName][owner].push(assetId);
-        _assetIndexByChannelAndOwner[channelName][assetId] = index;
-    }
+        if (_assetExistsByChannel[input.channelName][input.assetId]) {
+            revert AssetAlreadyExists(input.channelName, input.assetId);
+        }
 
-    function _addAssetToStatus(bytes32 channelName, bytes32 assetId, AssetStatus status) internal {
-        uint256 index = _assetsByChannelAndStatus[channelName][status].length;
-        _assetsByChannelAndStatus[channelName][status].push(assetId);
-        _assetIndexByChannelAndStatus[channelName][assetId] = index;
-    }
-
-    function _addToHistory(bytes32 channelName, bytes32 assetId, AssetOperation operation, uint256 timestamp) internal {
-        _assetHistoryByChannel[channelName][assetId].push(operation);
-        _assetHistoryTimestampsByChannel[channelName][assetId].push(timestamp);
-    }
-
-    function _removeAssetFromOwner(bytes32 channelName, bytes32 assetId, address owner) internal {
-        bytes32[] storage ownerAssets = _assetsByChannelAndOwner[channelName][owner];
-        uint256 assetIndex = _assetIndexByChannelAndOwner[channelName][assetId];
-        uint256 lastIndex = ownerAssets.length - 1;
+        // Create asset structure
+        Asset storage newAsset = _assetsByChannel[input.channelName][input.assetId];
+        newAsset.assetId = input.assetId;
+        newAsset.owner = originCaller;
+        newAsset.location = input.location;
+        newAsset.amount = input.amount;
+        newAsset.dataHash = input.dataHash;
         
-        // Move last element to deleted position
-        if (assetIndex != lastIndex) {
-            bytes32 lastAssetId = ownerAssets[lastIndex];
-            ownerAssets[assetIndex] = lastAssetId;
-            _assetIndexByChannelAndOwner[channelName][lastAssetId] = assetIndex;
+        newAsset.status = AssetStatus.ACTIVE;
+        newAsset.operation = AssetOperation.CREATE;
+        newAsset.createdAt = Utils.timestamp();
+        newAsset.lastUpdated = Utils.timestamp();
+        newAsset.originOwner = originCaller;
+        newAsset.externalId = input.externalId;
+
+        // Mark asset as existing
+        _assetExistsByChannel[input.channelName][input.assetId] = true;
+
+        // Para assets criados (origem), emitir evento de profundidade 0
+        bytes32[] memory emptyOrigins = new bytes32[](0);
+        
+        _emitDepthCalculation(
+            input.channelName,
+            input.assetId,
+            0,                       // depth 0 = origin
+            emptyOrigins            // no origins (this IS the origin)
+        );
+
+        emit AssetCreated(
+            input.channelName,
+            input.assetId,
+            originCaller,
+            input.location,
+            input.amount,
+            Utils.timestamp()
+        );
+    }      
+
+    function _performAssetUpdate(UpdateAssetInput calldata update, address originCaller) internal {
+
+        _validateAssetExists(update.channelName, update.assetId);
+        _validateAssetActive(update.channelName, update.assetId);
+        _validateAssetOwner(update.channelName, update.assetId, originCaller);
+        
+        Asset storage asset = _assetsByChannel[update.channelName][update.assetId];
+        
+        // Store current state for events
+        string memory currentLocation = asset.location;
+        uint256 currentAmount = asset.amount;
+        
+        // Update core state
+        asset.location = update.newLocation;
+        if (update.newAmount > 0) {
+            asset.amount = update.newAmount;
+        }
+        asset.operation = AssetOperation.UPDATE;
+        asset.lastUpdated = Utils.timestamp();
+        asset.dataHash = update.dataHash;
+        
+        _emitUpdateEvents(update.channelName, asset, currentLocation, currentAmount);
+    }
+
+    function _performAssetTransfer(TransferAssetInput calldata transfer, address originCaller) internal {
+        
+        _validateAssetExists(transfer.channelName, transfer.assetId);
+        _validateAssetActive(transfer.channelName, transfer.assetId);
+        _validateAssetOwner(transfer.channelName, transfer.assetId, originCaller);
+        
+        Asset storage asset = _assetsByChannel[transfer.channelName][transfer.assetId];
+
+        if (asset.owner == transfer.newOwner) {
+            revert TransferToSameOwner(transfer.channelName, transfer.assetId, transfer.newOwner);
+        }
+
+        ChannelAccess.requireMember(_getAddressDiscovery(), transfer.channelName, transfer.newOwner);
+
+        address currentOwner = asset.owner;
+        string memory currentLocation = asset.location;
+        uint256 currentAmount = asset.amount;
+
+        //Update core state
+        asset.owner = transfer.newOwner;   
+        asset.location = transfer.newLocation;
+        asset.amount = transfer.newAmount;
+        asset.dataHash = transfer.dataHash;
+        asset.externalId = transfer.externalId;
+        asset.operation = AssetOperation.TRANSFER;
+        asset.lastUpdated = Utils.timestamp();
+
+        _emitCustodyChanged(
+            transfer.channelName,
+            transfer.assetId,
+            currentOwner,
+            transfer.newOwner,
+            currentLocation,
+            transfer.newLocation,
+            currentAmount,
+            transfer.newAmount
+        );
+
+        emit AssetTransferred(
+            transfer.channelName,
+            transfer.assetId,
+            currentOwner,
+            transfer.newOwner,
+            currentLocation,
+            transfer.newLocation,
+            Utils.timestamp()
+        );
+    }
+
+    function _performAssetTransform(TransformAssetInput calldata transform, address originCaller) internal {
+
+        _validateAssetExists(transform.channelName, transform.assetId);
+        _validateAssetActive(transform.channelName, transform.assetId);
+        _validateAssetOwner(transform.channelName, transform.assetId, originCaller);
+
+        Asset storage originalAsset = _assetsByChannel[transform.channelName][transform.assetId];
+        
+        uint256 currentDepth = _getTransformationDepth(transform.channelName, transform.assetId);
+        if (currentDepth + 1 > MAX_TRANSFORMATION_DEPTH) {
+            revert TransformationChainTooDeep(currentDepth + 1, MAX_TRANSFORMATION_DEPTH);
+        }
+
+        if (_assetExistsByChannel[transform.channelName][transform.newAssetId]) {
+            revert AssetAlreadyExists(transform.channelName, transform.newAssetId);
+        }
+
+        //2. Inativar original asset  
+        originalAsset.status = AssetStatus.INACTIVE;
+        originalAsset.operation = AssetOperation.TRANSFORM;
+        originalAsset.lastUpdated = Utils.timestamp();
+
+
+        //3. Criar Novo Asset
+        Asset storage newAsset = _assetsByChannel[transform.channelName][transform.newAssetId];
+        newAsset.assetId = transform.newAssetId;
+        newAsset.owner = originalAsset.owner;   //Herda
+        newAsset.location = transform.newLocation;
+        newAsset.amount = transform.newAmount == 0 ? originalAsset.amount : transform.newAmount;
+        newAsset.status = AssetStatus.ACTIVE;
+        newAsset.operation = AssetOperation.TRANSFORM;
+        newAsset.createdAt = Utils.timestamp();
+        newAsset.lastUpdated = Utils.timestamp();
+        newAsset.originOwner = originalAsset.originOwner;
+        newAsset.dataHash = originalAsset.dataHash;
+        newAsset.externalId = originalAsset.externalId;   
+
+         //3.1 Novos campos de transformação do novo asset
+        newAsset.parentAssetId = transform.assetId;
+        newAsset.transformationId = transform.newAssetId;
+
+        for (uint256 i = 0; i < originalAsset.groupedAssets.length; i++) {
+            newAsset.groupedAssets.push(originalAsset.groupedAssets[i]);
+        }
+
+        newAsset.groupedBy = originalAsset.groupedBy;
+        
+        //4. Atualizar Rastreabilidade
+        _assetExistsByChannel[transform.channelName][transform.newAssetId] = true;
+      
+        // Adicionar childAsset ao original
+        originalAsset.childAssets.push(transform.newAssetId);
+
+        //5. Emitir eventos
+        _emitLineage(
+            transform.channelName,
+            transform.newAssetId,              // child (transformed asset)
+            transform.assetId,       // parent (original asset)
+            RelationshipType.TRANSFORM
+        );
+      
+        emit AssetTransformed(
+            transform.assetId,
+            transform.newAssetId,
+            newAsset.owner,
+            Utils.timestamp()
+        );
+    }
+
+    function _performAssetGroup(GroupAssetsInput calldata group, address originCaller) internal {
+
+        _validateAssetExists(group.channelName, group.groupAssetId);
+
+        //Pre-validate ALL assets and calculate total (atomic validation)
+        Asset[] memory assetsToGroup = new Asset[](group.assetIds.length);
+        uint256 totalAmounts = 0;
+        
+        for (uint256 i = 0; i < group.assetIds.length; i++) {
+            bytes32 assetId = group.assetIds[i];
+            
+            // Validate existence
+            if (!_assetExistsByChannel[group.channelName][assetId]) {
+                revert AssetNotFound(group.channelName, assetId);
+            }
+            
+            Asset storage asset = _assetsByChannel[group.channelName][assetId];
+            
+            // Validate business rules
+            if (asset.status != AssetStatus.ACTIVE) {
+                revert AssetNotActive(group.channelName, assetId);
+            }
+            
+            if (asset.owner != originCaller) {
+                revert MixedOwnershipNotAllowed(originCaller, asset.owner);
+            }
+            
+            // Store for batch operation (avoid repeated storage reads)
+            assetsToGroup[i] = asset;
+            totalAmounts += asset.amount;
+        }
+
+        if (totalAmounts == 0) {
+            revert InvalidGroupAmount(totalAmounts);
+        }
+
+        //1. Inativar assets a serem agrupados
+        for (uint256 i = 0; i < group.assetIds.length; i++) {
+            Asset storage originalAsset = _assetsByChannel[group.channelName][group.assetIds[i]];
+                        
+            originalAsset.status = AssetStatus.INACTIVE;
+            originalAsset.operation = AssetOperation.GROUP;
+            originalAsset.groupedBy = group.groupAssetId;  
+            originalAsset.lastUpdated = Utils.timestamp();            
+        }
+
+        //2. Criar asset de agrupamento
+        Asset storage groupAsset = _assetsByChannel[group.channelName][group.groupAssetId];
+
+        groupAsset.assetId = group.groupAssetId;   // User-defined ID
+        groupAsset.owner = originCaller;           // Owner dos assets originais
+        groupAsset.amount = totalAmounts;           // Total amount (já validado conservation)
+        groupAsset.location = group.location;      // Localização do grupo
+        groupAsset.status = AssetStatus.ACTIVE;
+        groupAsset.operation = AssetOperation.GROUP;
+        groupAsset.createdAt = Utils.timestamp();
+        groupAsset.lastUpdated = Utils.timestamp();
+        groupAsset.originOwner = originCaller;
+        groupAsset.dataHash = group.dataHash;
+
+
+        //2.1 Relacionar assets no grupo
+        for (uint256 i = 0; i < group.assetIds.length; i++) {
+            groupAsset.groupedAssets.push(group.assetIds[i]);  // REVERSE TRACKING
+
+            _emitLineage(
+                group.channelName,
+                group.groupAssetId,      // child (group asset)
+                group.assetIds[i],       // parent (component asset)
+                RelationshipType.GROUP_COMPONENT
+            );
+        }
+
+        //3. Registrar existência e indexação
+        _assetExistsByChannel[group.channelName][group.groupAssetId] = true;
+      
+        _emitRelationship(
+            group.channelName,
+            group.groupAssetId,      // primary (group asset)
+            group.assetIds,          // related (component assets)
+            AssetOperation.GROUP
+        );
+
+        uint256[] memory componentAmounts = new uint256[](group.assetIds.length);
+        for (uint256 i = 0; i < group.assetIds.length; i++) {
+            Asset storage componentAsset = _assetsByChannel[group.channelName][group.assetIds[i]];
+            componentAmounts[i] = componentAsset.amount;
         }
         
-        // Remove last element
-        ownerAssets.pop();
-        delete _assetIndexByChannelAndOwner[channelName][assetId];
+        _emitComposition(
+            group.channelName,
+            group.groupAssetId,
+            group.assetIds,
+            componentAmounts
+        );
+
+        emit AssetsGrouped(
+            group.assetIds,
+            group.groupAssetId,
+            originCaller,
+            totalAmounts,
+            Utils.timestamp()
+        );
+    }
+
+    function _performAssetInactivate(InactivateAssetInput calldata inactivate, address originCaller) internal {
+
+        _validateAssetExists(inactivate.channelName, inactivate.assetId);
+        _validateAssetActive(inactivate.channelName, inactivate.assetId);
+        _validateAssetOwner(inactivate.channelName, inactivate.assetId, originCaller);
+
+        Asset storage asset = _assetsByChannel[inactivate.channelName][inactivate.assetId];
+        
+        if (bytes(inactivate.finalLocation).length > 0) {
+            asset.location = inactivate.finalLocation;
+        }
+        
+        if (inactivate.finalDataHash != bytes32(0)) {
+            asset.dataHash = inactivate.finalDataHash;
+        }
+                
+        asset.status = AssetStatus.INACTIVE;
+        asset.operation = AssetOperation.INACTIVATE;
+        asset.lastUpdated = Utils.timestamp();
+                
+        emit AssetInactivated(
+            inactivate.assetId,
+            asset.owner,
+            AssetOperation.INACTIVATE,
+            Utils.timestamp()
+        );
     }
 
     function _generateTransformedAssetId(bytes32 channelName, bytes32 originalAssetId, string memory transformationId) 
         internal view returns (bytes32) 
     {
         return keccak256(abi.encodePacked(channelName, originalAssetId, transformationId, block.timestamp));
-    }
-
-    function _buildTransformationChain(bytes32 channelName, bytes32 assetId) 
-        internal view returns (bytes32[] memory chain) 
-    {
-        bytes32[] memory tempChain = new bytes32[](MAX_TRANSFORMATION_DEPTH + 1);
-        uint256 count = 0;
-        bytes32 currentId = assetId;
-        
-        while (currentId != bytes32(0) && count < MAX_TRANSFORMATION_DEPTH + 1) {
-            tempChain[count] = currentId;
-            currentId = _parentAssetByChannel[channelName][currentId];
-            count++;
-        }
-        
-        chain = new bytes32[](count);
-        for (uint256 i = 0; i < count; i++) {
-            chain[i] = tempChain[count - 1 - i];
-        }
-    }
-
-    function _updateAssetInStatusEnumeration(bytes32 channelName, bytes32 assetId, AssetStatus newStatus) internal {
-        // Get current asset to determine old status
-        Asset storage asset = _assetsByChannel[channelName][assetId];
-        AssetStatus oldStatus = asset.status;
-        
-        // If status is the same, no need to update enumeration
-        if (oldStatus == newStatus) {
-            return;
-        }
-        
-        // Remove from old status array
-        _removeAssetFromStatus(channelName, assetId, oldStatus);
-        
-        // Add to new status array
-        _addAssetToStatus(channelName, assetId, newStatus);
-    }
-
-    function _removeAssetFromStatus(bytes32 channelName, bytes32 assetId, AssetStatus status) internal {
-        bytes32[] storage statusAssets = _assetsByChannelAndStatus[channelName][status];
-        uint256 assetIndex = _assetIndexByChannelAndStatus[channelName][assetId];
-        uint256 lastIndex = statusAssets.length - 1;
-        
-        // Move last element to deleted position (swap and pop pattern)
-        if (assetIndex != lastIndex) {
-            bytes32 lastAssetId = statusAssets[lastIndex];
-            statusAssets[assetIndex] = lastAssetId;
-            _assetIndexByChannelAndStatus[channelName][lastAssetId] = assetIndex;
-        }
-        
-        // Remove last element
-        statusAssets.pop();
-        delete _assetIndexByChannelAndStatus[channelName][assetId];
     }
 
     function _generateSplitAssetId(bytes32 originalAssetId, uint256 index, bytes32 channelName) 
@@ -1269,7 +880,13 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         bytes32 currentId = assetId;
         
         while (currentId != bytes32(0) && depth < MAX_TRANSFORMATION_DEPTH) {
-            currentId = _parentAssetByChannel[channelName][currentId];
+            if (!_assetExistsByChannel[channelName][currentId]) {
+                break; // Asset não existe, parar
+            }
+
+            Asset storage currentAsset = _assetsByChannel[channelName][currentId];
+            currentId = currentAsset.parentAssetId;
+
             if (currentId != bytes32(0)) {
                 depth++;
             }
@@ -1281,6 +898,30 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
     // =============================================================
     //                    INTERNAL EVENT EMITTER FUNCTIONS
     // =============================================================
+    function _emitUpdateEvents(
+        bytes32 channelName,
+        Asset storage asset,
+        string memory previousLocation,
+        uint256 previousAmount
+    ) internal {
+        _emitAssetStateChanged(
+            channelName,
+            asset.assetId,
+            previousLocation,
+            asset.location,
+            previousAmount,
+            asset.amount
+        );
+        
+        emit AssetUpdated(
+            channelName,
+            asset.assetId,
+            asset.owner,
+            asset.amount,
+            asset.location,
+            Utils.timestamp()
+        );
+    }
     
     function _emitLineage(
         bytes32 channelName,
@@ -1339,6 +980,58 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             depth,
             origins
         );
+    }
+
+    function _emitAssetStateChanged(
+        bytes32 channelName,
+        bytes32 assetId,
+        string memory previousLocation,
+        string storage newLocation,
+        uint256 previousAmount,
+        uint256 newAmount
+    ) internal {
+        emit AssetStateChanged(
+            channelName,
+            assetId,
+            previousLocation,
+            newLocation,
+            previousAmount,
+            newAmount,
+            Utils.timestamp()
+        );
+
+    }
+
+    function _emitCustodyChanged(
+        bytes32 channelName,
+        bytes32 assetId,
+        address currentOwner,
+        address newOwner,
+        string memory currentLocation,
+        string calldata newLocation,
+        uint256 currentAmount,
+        uint256 newAmount
+    ) internal {
+        emit AssetCustodyChanged(
+            channelName,
+            assetId,
+            currentOwner,
+            newOwner,
+            currentLocation,
+            Utils.timestamp()
+        );
+
+        if (keccak256(bytes(currentLocation)) != keccak256(bytes(newLocation))) {
+            emit AssetStateChanged(
+                channelName,
+                assetId,
+                currentLocation,
+                newLocation,
+                currentAmount,
+                newAmount,
+                Utils.timestamp()
+            );
+        }
     }
 
     // =============================================================

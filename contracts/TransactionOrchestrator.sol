@@ -129,11 +129,6 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         if (request.processId == bytes32(0)) revert InvalidProcessId();
         if (request.natureId == bytes32(0)) revert InvalidNatureId();
         if (request.stageId == bytes32(0)) revert InvalidStageId();
-
-        if (request.dataHashes.length == 0) revert EmptyDataHashes();
-        if (request.dataHashes.length > MAX_DATA_HASHES) {
-            revert TooManyDataHashes(request.dataHashes.length, MAX_DATA_HASHES);
-        }
     }
 
     function _validateProcess(TransactionRequest calldata request, IProcessRegistry processRegistry) 
@@ -229,10 +224,10 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         IAssetRegistry.CreateAssetInput memory input = IAssetRegistry.CreateAssetInput({
             assetId: assetId,
             channelName: request.channelName,
+            location: request.operationData.initialLocation,
             amount: request.operationData.initialAmount,
-            idLocal: request.operationData.initialLocation,
-            dataHashes: request.dataHashes,
-            externalIds: request.operationData.externalIds
+            dataHash: request.dataHash,
+            externalId: request.operationData.externalId
         });
         
         // Execute
@@ -255,9 +250,9 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         IAssetRegistry.UpdateAssetInput memory input = IAssetRegistry.UpdateAssetInput({
             assetId: assetId,
             channelName: request.channelName,
-            idLocal: request.operationData.newLocation,
-            amount: request.operationData.newAmount,
-            dataHashes: request.dataHashes
+            newLocation: request.operationData.newLocation,
+            newAmount: request.operationData.newAmount,
+            dataHash: request.dataHash
         });
         
         assetRegistry.updateAsset(input, _msgSender());
@@ -279,9 +274,10 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             assetId: assetId,
             channelName: request.channelName,
             newOwner: request.operationData.targetOwner,
-            idLocal: request.operationData.newLocation,
-            dataHashes: request.dataHashes,
-            externalIds: request.operationData.externalIds
+            newLocation: request.operationData.newLocation,
+            newAmount: request.operationData.newAmount,
+            dataHash: request.dataHash,
+            externalId: request.operationData.externalId
         });
         
         assetRegistry.transferAsset(input, _msgSender());
@@ -301,11 +297,10 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         
         IAssetRegistry.TransformAssetInput memory input = IAssetRegistry.TransformAssetInput({
             assetId: assetId,
-            transformationId: string(abi.encodePacked("TRANSFORM_", Utils.timestamp())),
+            newAssetId: request.operationData.newAssetId,
             channelName: request.channelName,
-            amount: request.operationData.newAmount,
-            idLocal: request.operationData.newLocation,
-            dataHashes: request.dataHashes
+            newAmount: request.operationData.newAmount,
+            newLocation: request.operationData.newLocation
         });
         
         assetRegistry.transformAsset(input, _msgSender());
@@ -339,7 +334,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             assetId: assetId,
             channelName: request.channelName,
             amounts: request.operationData.splitAmounts,
-            idLocal: request.operationData.newLocation,
+            location: request.operationData.newLocation,
             dataHashes: splitDataHashes
         });
         
@@ -364,8 +359,8 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             assetIds: request.targetAssetIds,
             groupAssetId: groupAssetId,
             channelName: request.channelName,
-            idLocal: request.operationData.newLocation,
-            dataHashes: request.dataHashes
+            location: request.operationData.newLocation,
+            dataHash: request.dataHash
         });
         
         assetRegistry.groupAssets(input, _msgSender());
@@ -386,14 +381,12 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
     ) private returns (bytes32[] memory affectedAssets) {
         
         bytes32 groupAssetId = request.targetAssetIds[0];
-        
-        bytes32 dataHash = request.dataHashes.length > 0 ? request.dataHashes[0] : bytes32(0);
-        
+                
         IAssetRegistry.UngroupAssetsInput memory input = IAssetRegistry.UngroupAssetsInput({
             assetId: groupAssetId,
             channelName: request.channelName,
-            idLocal: request.operationData.newLocation,
-            dataHash: dataHash
+            location: request.operationData.newLocation,
+            dataHash: request.dataHash
         });
         
         assetRegistry.ungroupAssets(input, _msgSender());
@@ -410,14 +403,12 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
     ) private returns (bytes32[] memory affectedAssets) {
         
         bytes32 assetId = request.targetAssetIds[0];
-        
-        bytes32 finalDataHash = request.dataHashes.length > 0 ? request.dataHashes[0] : bytes32(0);
-        
+                
         IAssetRegistry.InactivateAssetInput memory input = IAssetRegistry.InactivateAssetInput({
             assetId: assetId,
             channelName: request.channelName,
             finalLocation: request.operationData.newLocation,
-            finalDataHash: finalDataHash
+            finalDataHash: request.dataHash
         });
         
         assetRegistry.inactivateAsset(input, _msgSender());

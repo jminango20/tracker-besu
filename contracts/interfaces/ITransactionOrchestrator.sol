@@ -43,6 +43,7 @@ interface ITransactionOrchestrator {
         OperationData operationData;  // Operation-specific parameters
         
         // Schema data (off-chain)
+        bytes32 dataHash;         // Hashes of sensitive data
         bytes32[] dataHashes;         // Hashes of sensitive data
         
         // Metadata
@@ -60,7 +61,7 @@ interface ITransactionOrchestrator {
         
         // TRANSFER_ASSET
         address targetOwner;          // New owner for transfer
-        string[] externalIds;         // External tracking IDs
+        string externalId;            // External tracking IDs
         
         // SPLIT_ASSET
         uint256[] splitAmounts;       // Amounts for each split asset
@@ -70,7 +71,7 @@ interface ITransactionOrchestrator {
         
         // UPDATE_ASSET / TRANSFORM_ASSET
         uint256 newAmount;            // Updated amount (0 = no change)
-        bytes32 newProcessId;         // New process ID (for transform)
+        bytes32 newAssetId;         // New process ID (for transform)
         
         // Common fields
         string newLocation;           // Updated/new location
