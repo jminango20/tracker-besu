@@ -26,7 +26,7 @@ import {
 } from "./utils/index";
 import hre from "hardhat";
 
-describe.only("AssetRegistry test", function () {
+describe("AssetRegistry test", function () {
 
   let accounts: any;
   let deployer: HardhatEthersSigner;

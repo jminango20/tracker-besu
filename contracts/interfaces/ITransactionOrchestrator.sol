@@ -43,8 +43,8 @@ interface ITransactionOrchestrator {
         OperationData operationData;  // Operation-specific parameters
         
         // Schema data (off-chain)
-        bytes32 dataHash;         // Hashes of sensitive data
-        bytes32[] dataHashes;         // Hashes of sensitive data
+        bytes32 dataHash;             // Hashes of sensitive data
+        bytes32[] dataHashes;         // Hashes of sensitive data - split
         
         // Metadata
         string description;           // Operation description (optional)
