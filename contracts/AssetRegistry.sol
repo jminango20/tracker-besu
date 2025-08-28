@@ -7,19 +7,10 @@ import {IProcessRegistry} from "./interfaces/IProcessRegistry.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {
     DEFAULT_ADMIN_ROLE,
-    PROCESS_REGISTRY,
     TRANSACTION_ORCHESTRATOR,
-    MAX_PAGE_SIZE,
-    FIRST_PAGE,
-    INVALID_PAGE,
     ASSET_ADMIN_ROLE,
-    MAX_SPLIT_COUNT,
     MIN_SPLIT_AMOUNT,
-    MAX_GROUP_SIZE,
     MIN_GROUP_SIZE,
-    MAX_GROUP_DATA_HASHES,
-    MAX_DATA_HASHES,
-    MAX_EXTERNAL_IDS,
     MAX_TRANSFORMATION_DEPTH
 } from "./lib/Constants.sol";
 import {Utils} from "./lib/Utils.sol";
@@ -140,95 +131,9 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyTransactionOrchestrator()
         validChannelName(split.channelName)
         onlyChannelMemberAddress(split.channelName, originCaller)
-        //assetExists(split.channelName, split.assetId)
-        //assetActive(split.channelName, split.assetId)
-        //onlyAssetOwner(split.channelName, split.assetId, originCaller)
     {
-        /*
         _validateSplitAssetInput(split);
-
-        Asset storage originalAsset = _assetsByChannel[split.channelName][split.assetId];
-        
-        //1. Validar conservação da quantidade (amount)
-        uint256 totalSplitAmount = 0;
-        for (uint256 i = 0; i < split.amounts.length; i++) {
-            totalSplitAmount += split.amounts[i];
-        }
-        
-        if (totalSplitAmount != originalAsset.amount) {
-            revert AmountConservationViolated(originalAsset.amount, totalSplitAmount);
-        }
-
-        //2. Inativar original asset
-        originalAsset.status = AssetStatus.INACTIVE;
-        originalAsset.operation = AssetOperation.SPLIT;
-        originalAsset.lastUpdated = Utils.timestamp();
-
-        //3. Criar novos assets
-        bytes32[] memory newAssetIds = new bytes32[](split.amounts.length);
-
-        for (uint256 i = 0; i < split.amounts.length; i++) {
-            bytes32 newAssetId = _generateSplitAssetId(split.assetId, i, split.channelName);
-            
-            // Verificar se ID gerado não existe (safety check)
-            if (_assetExistsByChannel[split.channelName][newAssetId]) {
-                revert AssetAlreadyExists(split.channelName, newAssetId);
-            }
-            
-            Asset storage newAsset = _assetsByChannel[split.channelName][newAssetId];
-            
-            //PROPRIEDADES BÁSICAS
-            newAsset.assetId = newAssetId;
-            newAsset.owner = originalAsset.owner;           // Herda owner
-            newAsset.amount = split.amounts[i];            // Amount específico
-            newAsset.location = split.location;            // Nova localização
-            
-            //DADOS INDIVIDUAIS
-            newAsset.dataHash = split.dataHashes[i];
-            
-            //TRACKING DE SPLIT
-            newAsset.parentAssetId = split.assetId;
-            // transformationId personalizado para split
-            newAsset.transformationId = string(abi.encodePacked("SPLIT_", _uint2str(i + 1)));
-            
-            //METADATA
-            newAsset.status = AssetStatus.ACTIVE;
-            newAsset.operation = AssetOperation.SPLIT;
-            newAsset.createdAt = Utils.timestamp();
-            newAsset.lastUpdated = Utils.timestamp();
-            newAsset.originOwner = originalAsset.owner;
-            
-            //REGISTRAR EXISTÊNCIA E INDEXAÇÃO
-            _assetExistsByChannel[split.channelName][newAssetId] = true;
-            
-            newAssetIds[i] = newAssetId;
-
-            _emitLineage(
-                split.channelName,
-                newAssetId,                 // child (new split asset)
-                split.assetId,             // parent (original asset) 
-                RelationshipType.SPLIT
-            );
-        }
-        
-        //5. Adicionar child assets no original
-        originalAsset.childAssets = newAssetIds;
-
-        _emitRelationship(
-            split.channelName,
-            split.assetId,           // primary (original asset)
-            newAssetIds,             // related (all split assets)
-            AssetOperation.SPLIT
-        );
-        
-        emit AssetSplit(
-            split.assetId,
-            newAssetIds,
-            originalAsset.owner,
-            split.amounts,
-            Utils.timestamp()
-        );
-        */
+        _performAssetSplit(split, originCaller);
     }
 
     /**
@@ -254,58 +159,10 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         onlyTransactionOrchestrator()
         validChannelName(ungroup.channelName)
         onlyChannelMemberAddress(ungroup.channelName, originCaller)
-        //assetExists(ungroup.channelName, ungroup.assetId)
-        //assetActive(ungroup.channelName, ungroup.assetId)
-        //onlyAssetOwner(ungroup.channelName, ungroup.assetId, originCaller)  
     {
-        /*
+        
         _validateUngroupAssetsInput(ungroup);
-
-        Asset storage groupAsset = _assetsByChannel[ungroup.channelName][ungroup.assetId];
-
-        _validateCanUngroup(groupAsset);
-
-        //1. Reativar assets a serem desagrupados
-        bytes32[] memory ungroupedAssetIds = groupAsset.groupedAssets; // Array já existe!
-
-        for (uint256 i = 0; i < ungroupedAssetIds.length; i++) {
-            bytes32 childAssetId = ungroupedAssetIds[i];
-            
-            //1.1 Verificar se asset filho existe
-            if (!_assetExistsByChannel[ungroup.channelName][childAssetId]) {
-                revert GroupedAssetNotFound(ungroup.assetId, childAssetId);
-            }
-            
-            Asset storage childAsset = _assetsByChannel[ungroup.channelName][childAssetId];
-                        
-            //1.2 Aplicar novos dados ao asset filho (se fornecidos)
-            if (ungroup.dataHash != bytes32(0)) {
-                childAsset.dataHash = ungroup.dataHash;
-            }
-            
-            if (bytes(ungroup.location).length > 0) {
-                childAsset.location = ungroup.location;
-            }
-            
-            //1.3 Desvincular asset filho do grupo
-            childAsset.groupedBy = bytes32(0);  // Não está mais agrupado  
-            childAsset.status = AssetStatus.ACTIVE;
-            childAsset.operation = AssetOperation.UNGROUP;
-            childAsset.lastUpdated = Utils.timestamp();
-        }
-
-        //2. Remove and Inactivate asset grupo   
-        groupAsset.status = AssetStatus.INACTIVE;
-        groupAsset.operation = AssetOperation.UNGROUP;
-        groupAsset.lastUpdated = Utils.timestamp();
-                
-        emit AssetsUngrouped(
-            ungroup.assetId,
-            ungroupedAssetIds,
-            groupAsset.owner,
-            Utils.timestamp()
-        );
-        */
+        _performAssetUngroup(ungroup, originCaller);
     }
 
     /**
@@ -410,7 +267,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         }
         
         // Verificar duplicatas nos assets
-        if (_hasDuplicateAssets(input.assetIds)) {
+        if (_hasDuplicateAssets(input.assetIds)) { //TODO - Fazer off-chain
             revert DuplicateAssetsInGroup();
         }
         
@@ -420,34 +277,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
                 revert SelfReferenceInGroup(input.assetIds[i]);
             }
         }
-    }
-
-    function _validateAssetsAndAmountConservation(GroupAssetsInput calldata input, address originalOwner) internal view returns (uint256) {
-        uint256 totalOriginalAmounts = 0;
-        address expectedOwner = originalOwner;
-        
-        // Validar cada asset e acumular amounts
-        for (uint256 i = 0; i < input.assetIds.length; i++) {
-            bytes32 assetId = input.assetIds[i];
-            
-            if (!_assetExistsByChannel[input.channelName][assetId]) {
-                revert AssetNotFound(input.channelName, assetId);
-            }
-            
-            Asset storage asset = _assetsByChannel[input.channelName][assetId];
-            
-            if (asset.status != AssetStatus.ACTIVE) {
-                revert AssetNotActive(input.channelName, assetId);
-            }
-            
-            if (asset.owner != expectedOwner) {
-                revert MixedOwnershipNotAllowed(expectedOwner, asset.owner);
-            }
-            
-            totalOriginalAmounts += asset.amount;
-        }
-
-        return totalOriginalAmounts;
     }
 
     function _validateUngroupAssetsInput(UngroupAssetsInput calldata input) internal pure {
@@ -461,6 +290,10 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         
         if (groupAsset.operation == AssetOperation.UNGROUP) {
             revert AssetAlreadyUngrouped(groupAsset.assetId);
+        }
+
+        if (groupAsset.operation != AssetOperation.GROUP) {
+            revert AssetNotGrouped(groupAsset.assetId);
         }
     }
 
@@ -686,12 +519,125 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         );
     }
 
+    function _performAssetSplit(SplitAssetInput calldata split, address originCaller) internal {
+
+        _validateAssetExists(split.channelName, split.assetId);
+        _validateAssetActive(split.channelName, split.assetId);
+        _validateAssetOwner(split.channelName, split.assetId, originCaller);
+
+        Asset storage originalAsset = _assetsByChannel[split.channelName][split.assetId];
+        
+        //1. Validar conservação da quantidade (amount)
+        uint256 totalSplitAmount = 0;
+        uint256 numSplits = split.amounts.length;
+
+        unchecked {
+            for (uint256 i = 0; i < numSplits; i++) {
+                totalSplitAmount += split.amounts[i];
+            }
+        }
+        
+        if (totalSplitAmount != originalAsset.amount) {
+            revert AmountConservationViolated(originalAsset.amount, totalSplitAmount);
+        }
+
+        //2. Inativar original asset
+        originalAsset.status = AssetStatus.INACTIVE;
+        originalAsset.operation = AssetOperation.SPLIT;
+        originalAsset.lastUpdated = Utils.timestamp();
+
+        //3. Criar novos assets filhos
+        bytes32[] memory newAssetIds = new bytes32[](numSplits);
+
+        for (uint256 i = 0; i < split.amounts.length; i++) {
+            bytes32 newAssetId = _generateSplitAssetId(split.assetId, i, split.channelName);
+            
+            // Verificar se ID gerado não existe (safety check)
+            if (_assetExistsByChannel[split.channelName][newAssetId]) {
+                revert AssetAlreadyExists(split.channelName, newAssetId);
+            }
+            
+            Asset storage newAsset = _assetsByChannel[split.channelName][newAssetId];
+            
+            //PROPRIEDADES BÁSICAS
+            newAsset.assetId = newAssetId;
+            newAsset.owner = originalAsset.owner;           // Herda owner
+            newAsset.amount = split.amounts[i];            // Amount específico
+            newAsset.location = split.location;            // Nova localização
+            
+            //DADOS INDIVIDUAIS
+            newAsset.dataHash = split.dataHashes[i];
+            
+            //HERANÇA
+            newAsset.originOwner = originalAsset.owner;
+            newAsset.externalId = originalAsset.externalId;
+            
+            //TRACKING DE SPLIT
+            newAsset.parentAssetId = split.assetId;
+            // transformationId personalizado para split
+            newAsset.transformationId = _generateSplitTransformationId(i);
+            
+            //METADATA
+            newAsset.groupedBy = bytes32(0);
+            newAsset.status = AssetStatus.ACTIVE;
+            newAsset.operation = AssetOperation.SPLIT;
+            newAsset.createdAt = Utils.timestamp();
+            newAsset.lastUpdated = Utils.timestamp();
+            
+            //REGISTRAR EXISTÊNCIA E INDEXAÇÃO
+            _assetExistsByChannel[split.channelName][newAssetId] = true;
+            
+            newAssetIds[i] = newAssetId;
+        }
+
+        //TODO
+        for (uint256 i = 0; i < numSplits; i++) {
+            originalAsset.childAssets.push(newAssetIds[i]);
+        }
+        
+        //5. Adicionar child assets no original
+        originalAsset.childAssets = newAssetIds;
+
+        //6. Emitir eventos
+        for (uint256 i = 0; i < numSplits; i++) {
+            _emitLineage(
+                split.channelName,
+                newAssetIds[i],              // child (new split asset)
+                split.assetId,               // parent (original asset) 
+                RelationshipType.SPLIT
+            );
+        }
+
+        _emitRelationship(
+            split.channelName,
+            split.assetId,           // primary (original asset)
+            newAssetIds,             // related (all split assets)
+            AssetOperation.SPLIT
+        );
+
+        _emitSplitComposition(
+            split.channelName,
+            split.assetId,
+            newAssetIds,
+            split.amounts
+        );
+        
+        emit AssetSplit(
+            split.assetId,
+            newAssetIds,
+            originalAsset.owner,
+            split.amounts,
+            Utils.timestamp()
+        );
+    }
+
     function _performAssetGroup(GroupAssetsInput calldata group, address originCaller) internal {
 
-        _validateAssetExists(group.channelName, group.groupAssetId);
+        if (_assetExistsByChannel[group.channelName][group.groupAssetId]) {
+            revert AssetAlreadyExists(group.channelName, group.groupAssetId);
+        }
 
         //Pre-validate ALL assets and calculate total (atomic validation)
-        Asset[] memory assetsToGroup = new Asset[](group.assetIds.length);
         uint256 totalAmounts = 0;
         
         for (uint256 i = 0; i < group.assetIds.length; i++) {
@@ -713,8 +659,6 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
                 revert MixedOwnershipNotAllowed(originCaller, asset.owner);
             }
             
-            // Store for batch operation (avoid repeated storage reads)
-            assetsToGroup[i] = asset;
             totalAmounts += asset.amount;
         }
 
@@ -739,6 +683,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         groupAsset.owner = originCaller;           // Owner dos assets originais
         groupAsset.amount = totalAmounts;           // Total amount (já validado conservation)
         groupAsset.location = group.location;      // Localização do grupo
+        groupAsset.groupedBy = bytes32(0);
         groupAsset.status = AssetStatus.ACTIVE;
         groupAsset.operation = AssetOperation.GROUP;
         groupAsset.createdAt = Utils.timestamp();
@@ -746,11 +691,16 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         groupAsset.originOwner = originCaller;
         groupAsset.dataHash = group.dataHash;
 
-
         //2.1 Relacionar assets no grupo
         for (uint256 i = 0; i < group.assetIds.length; i++) {
-            groupAsset.groupedAssets.push(group.assetIds[i]);  // REVERSE TRACKING
+            groupAsset.groupedAssets.push(group.assetIds[i]);
+        }
 
+        //3. Registrar existência e indexação
+        _assetExistsByChannel[group.channelName][group.groupAssetId] = true;
+
+        //4. Emitir eventos de lineage para cada componente
+        for (uint256 i = 0; i < group.assetIds.length; i++) {
             _emitLineage(
                 group.channelName,
                 group.groupAssetId,      // child (group asset)
@@ -759,9 +709,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             );
         }
 
-        //3. Registrar existência e indexação
-        _assetExistsByChannel[group.channelName][group.groupAssetId] = true;
-      
+        //5. Emitir evento de relacionamento em batch
         _emitRelationship(
             group.channelName,
             group.groupAssetId,      // primary (group asset)
@@ -769,6 +717,7 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             AssetOperation.GROUP
         );
 
+        //6. Emitir composição detalhada
         uint256[] memory componentAmounts = new uint256[](group.assetIds.length);
         for (uint256 i = 0; i < group.assetIds.length; i++) {
             Asset storage componentAsset = _assetsByChannel[group.channelName][group.assetIds[i]];
@@ -789,6 +738,98 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
             totalAmounts,
             Utils.timestamp()
         );
+    }
+
+    function _performAssetUngroup(UngroupAssetsInput calldata ungroup, address originCaller) internal {
+        
+        _validateAssetExists(ungroup.channelName, ungroup.assetId);
+        _validateAssetActive(ungroup.channelName, ungroup.assetId);
+        _validateAssetOwner(ungroup.channelName, ungroup.assetId, originCaller);
+
+        Asset storage groupAsset = _assetsByChannel[ungroup.channelName][ungroup.assetId];
+
+        _validateCanUngroup(groupAsset);
+
+        //1. Pre-validacão de assets a serem desagrupados
+        bytes32[] memory ungroupedAssetIds = groupAsset.groupedAssets; // Array já existe!
+        uint256 numAssets = ungroupedAssetIds.length;
+
+        for (uint256 i = 0; i < numAssets; i++) {
+            bytes32 childAssetId = ungroupedAssetIds[i];
+            
+            //1.1 Verificar se asset filho existe
+            if (!_assetExistsByChannel[ungroup.channelName][childAssetId]) {
+                revert GroupedAssetNotFound(ungroup.assetId, childAssetId);
+            }
+            
+            Asset storage childAsset = _assetsByChannel[ungroup.channelName][childAssetId];
+
+            if (childAsset.groupedBy != ungroup.assetId) {
+                revert InvalidGroupRelationship(childAssetId, ungroup.assetId);
+            }
+
+            if (childAsset.status != AssetStatus.INACTIVE) {
+                revert GroupedAssetNotInactive(childAssetId);
+            }
+        }
+
+        // 2. Ativar assets filhos
+        for (uint256 i = 0; i < numAssets; i++) {
+
+            bytes32 childAssetId = ungroupedAssetIds[i];
+            Asset storage childAsset = _assetsByChannel[ungroup.channelName][childAssetId];
+
+            //2.1 Aplicar novos dados ao asset filho (se fornecidos)
+            if (ungroup.dataHash != bytes32(0)) {
+                childAsset.dataHash = ungroup.dataHash;
+            }
+            
+            if (bytes(ungroup.location).length > 0) {
+                childAsset.location = ungroup.location;
+            }
+
+            //2.2 Desvincular asset filho do grupo
+            childAsset.groupedBy = bytes32(0);  // Não está mais agrupado  
+            childAsset.status = AssetStatus.ACTIVE;
+            childAsset.operation = AssetOperation.UNGROUP;
+            childAsset.lastUpdated = Utils.timestamp();
+        }
+
+        //3. Inactivate asset grupo   
+        groupAsset.status = AssetStatus.INACTIVE;
+        groupAsset.operation = AssetOperation.UNGROUP;
+        groupAsset.lastUpdated = Utils.timestamp();
+
+        //4. Emitir evento de desagrupamento
+
+        for (uint256 i = 0; i < numAssets; i++) {
+            _emitLineage(
+                ungroup.channelName,
+                ungroupedAssetIds[i],        // child (reactivated asset)
+                ungroup.assetId,            // parent (group asset being dissolved)
+                RelationshipType.UNGROUP     
+            );
+        }
+
+        _emitRelationship(
+            ungroup.channelName,
+            ungroup.assetId,             // primary (group being dissolved)
+            ungroupedAssetIds,           // related (assets being reactivated)
+            AssetOperation.UNGROUP
+        );
+
+        _emitCompositionDissolution(
+            ungroup.channelName,
+            ungroup.assetId,
+            ungroupedAssetIds
+        );
+                
+        emit AssetsUngrouped(
+            ungroup.assetId,
+            ungroupedAssetIds,
+            groupAsset.owner,
+            Utils.timestamp()
+        );        
     }
 
     function _performAssetInactivate(InactivateAssetInput calldata inactivate, address originCaller) internal {
@@ -819,48 +860,47 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         );
     }
 
-    function _generateTransformedAssetId(bytes32 channelName, bytes32 originalAssetId, string memory transformationId) 
-        internal view returns (bytes32) 
-    {
-        return keccak256(abi.encodePacked(channelName, originalAssetId, transformationId, block.timestamp));
-    }
-
     function _generateSplitAssetId(bytes32 originalAssetId, uint256 index, bytes32 channelName) 
         internal pure returns (bytes32) 
     {
         return keccak256(abi.encodePacked(
             originalAssetId, 
             index, 
-            channelName
+            channelName,
+            "SPLIT"
         ));
     }
 
+    function _generateSplitTransformationId(uint256 index) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("SPLIT_", _uint2str(index + 1)));
+}
+
+
     function _uint2str(uint256 _i) internal pure returns (string memory) {
-        if (_i == 0) {
-            return "0";
-        }
+        if (_i == 0) return "0";
+        
         uint256 j = _i;
         uint256 length;
         while (j != 0) {
             length++;
             j /= 10;
         }
+        
         bytes memory bstr = new bytes(length);
         uint256 k = length;
         j = _i;
-        while (j != 0) {
-            bstr[--k] = bytes1(uint8(48 + j % 10));
-            j /= 10;
+        
+        unchecked {
+            while (j != 0) {
+                bstr[--k] = bytes1(uint8(48 + j % 10));
+                j /= 10;
+            }
         }
         return string(bstr);
     }
 
     function _hasDuplicateAssets(bytes32[] calldata assetIds) internal pure returns (bool) {
         if (assetIds.length <= 1) return false;
-
-        if (assetIds.length > MAX_GROUP_SIZE) {
-            revert TooManyAssetsForDuplicateCheck(assetIds.length, MAX_GROUP_SIZE);
-        }
 
         for (uint256 i = 0; i < assetIds.length; i++) {
             for (uint256 j = i + 1; j < assetIds.length; j++) {
@@ -968,6 +1008,19 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
         );
     }
 
+    function _emitCompositionDissolution(
+        bytes32 channelName,
+        bytes32 groupAssetId,
+        bytes32[] memory dissolvedAssets
+    ) internal {
+        emit AssetCompositionDissolved(
+            channelName,
+            groupAssetId,
+            dissolvedAssets,
+            Utils.timestamp()
+        );
+    }
+
     function _emitDepthCalculation(
         bytes32 channelName,
         bytes32 assetId,
@@ -1032,6 +1085,20 @@ contract AssetRegistry is Context, BaseTraceContract, IAssetRegistry {
                 Utils.timestamp()
             );
         }
+    }
+    function _emitSplitComposition(
+        bytes32 channelName,
+        bytes32 originalAssetId,
+        bytes32[] memory splitAssets,
+        uint256[] calldata splitAmounts
+    ) internal {
+        emit AssetSplitComposition(
+            channelName,
+            originalAssetId,
+            splitAssets,
+            splitAmounts,
+            Utils.timestamp()
+        );
     }
 
     // =============================================================

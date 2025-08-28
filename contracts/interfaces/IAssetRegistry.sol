@@ -137,7 +137,7 @@ interface IAssetRegistry {
     struct UngroupAssetsInput {
         bytes32 assetId;           // Group asset to ungroup
         bytes32 channelName;       // Channel permissions
-        string location;            // New location (empty = no change)
+        string location;           // New location (empty = no change)
         bytes32 dataHash;          // Single hash for all ungrouped assets
     }
 
@@ -161,7 +161,8 @@ interface IAssetRegistry {
     enum RelationshipType {
         SPLIT,           // Child came from splitting parent
         TRANSFORM,       // Child is transformation of parent
-        GROUP_COMPONENT  // Child is component of a group (parent is group)
+        GROUP_COMPONENT, // Child is component of a group (parent is group)
+        UNGROUP          // Child reactivated from group dissolution
     }
 
     // =============================================================
@@ -371,6 +372,24 @@ interface IAssetRegistry {
         uint256 newAmount,
         uint256 timestamp
     );
+
+    // COMPOSITION TRACKING
+    event AssetCompositionDissolved(
+        bytes32 indexed channelName,
+        bytes32 indexed groupAssetId,
+        bytes32[] dissolvedAssets,
+        uint256 timestamp
+    );
+
+    // COMPOSITION TRACKING (SPLIT)
+    event AssetSplitComposition(
+        bytes32 indexed channelName,
+        bytes32 indexed originalAssetId,
+        bytes32[] splitAssets,
+        uint256[] splitAmounts,
+        uint256 timestamp
+    );
+
     
     // =============================================================
     //                        ERRORS
@@ -401,6 +420,8 @@ interface IAssetRegistry {
     error InsufficientSplitParts(uint256 provided, uint8 minimum);
     error TooManyAssetsForDuplicateCheck(uint256 provided, uint256 maximum);
     error OnlyTransactionOrchestrator();
+    error InvalidGroupRelationship(bytes32 childAssetId, bytes32 expectedGroupId);
+    error GroupedAssetNotInactive(bytes32 childAssetId);
 
     // =============================================================
     //                    ASSET REGISTRY

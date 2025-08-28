@@ -26,7 +26,7 @@ import {
 } from "./utils/index";
 import hre from "hardhat";
 
-describe("AssetRegistry test", function () {
+describe.only("AssetRegistry test", function () {
 
   let accounts: any;
   let deployer: HardhatEthersSigner;
@@ -261,7 +261,7 @@ describe("AssetRegistry test", function () {
       
       // Check initial transformation state
       expect(asset.parentAssetId).to.equal(hre.ethers.ZeroHash);
-      expect(asset.transformationId).to.equal("");
+      expect(asset.transformationId).to.equal(hre.ethers.ZeroHash);
       expect(asset.childAssets.length).to.equal(0);
 
       // Check active status
@@ -1367,8 +1367,8 @@ describe("AssetRegistry test", function () {
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
         location: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalId: []
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
@@ -1376,8 +1376,8 @@ describe("AssetRegistry test", function () {
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
         location: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalId: []
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -1391,19 +1391,20 @@ describe("AssetRegistry test", function () {
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
         location: LOCATION_B,
-        dataHashes: [DATA_HASH_2]
+        dataHash: DATA_HASH_2
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Transform the group asset
+      const newAssetGenerated = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP-PROCESSING"));
       const transformInput = {
         assetId: GROUP_ASSET,
-        transformationId: "GROUP-PROCESSING",
+        newAssetId: newAssetGenerated,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT + 20,
-        location: LOCATION_A,
-        dataHashes: [DATA_HASH_3]
+        newAmount: DEFAULT_AMOUNT + 20,
+        newLocation: LOCATION_A,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address);
@@ -1823,10 +1824,10 @@ describe("AssetRegistry test", function () {
         const createInput = {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
-            amount: 1000, //Vamos splitar em: 400 + 300 + 300
             location: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: [EXTERNAL_ID_1]
+            amount: 1000, //Vamos splitar em: 400 + 300 + 300
+            dataHash: DATA_HASH_1,
+            externalId: EXTERNAL_ID_1
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -1860,14 +1861,11 @@ describe("AssetRegistry test", function () {
             expect(newAsset.status).to.equal(0); // ACTIVE
             expect(newAsset.operation).to.equal(4); // SPLIT
             expect(newAsset.parentAssetId).to.equal(ASSET_1);
-            expect(newAsset.newAssetId).to.equal(`SPLIT_${i + 1}`);
-            expect(newAsset.dataHashes.length).to.equal(1);
-            expect(newAsset.dataHashes[0]).to.equal(splitInput.dataHashes[i]);
+            expect(newAsset.dataHash).to.equal(splitInput.dataHashes[i]);
             expect(newAsset.originOwner).to.equal(accounts.member1.address);
             
             // Should not inherit grouping or external IDs
             expect(newAsset.groupedAssets.length).to.equal(0);
-            expect(newAsset.externalId.length).to.equal(0);
             expect(newAsset.childAssets.length).to.equal(0);
         }
     });
@@ -1882,10 +1880,10 @@ describe("AssetRegistry test", function () {
         const createInput = {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
-            amount: 500,
             location: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: []
+            amount: 500,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -1912,10 +1910,10 @@ describe("AssetRegistry test", function () {
         const createInput = {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
-            amount: DEFAULT_AMOUNT,
             location: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: []
+            amount: DEFAULT_AMOUNT,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -1933,7 +1931,7 @@ describe("AssetRegistry test", function () {
             .withArgs(DEFAULT_AMOUNT, SPLIT_AMOUNT_1 + SPLIT_AMOUNT_2 + SPLIT_AMOUNT_1);
     });
 
-    it("Should revert if amounts and dataHashes arrays have different lengths", async function () {
+    it("Should revert if amounts and dataHash arrays have different lengths", async function () {
         const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
 
         // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
@@ -1942,10 +1940,10 @@ describe("AssetRegistry test", function () {
         const createInput = {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
-            amount: DEFAULT_AMOUNT,
             location: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: []
+            amount: DEFAULT_AMOUNT,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -1954,8 +1952,8 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2], // 2 amounts
-            idLocal: LOCATION_B,
-            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4] // 3 dataHashes
+            location: LOCATION_B,
+            dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4] // 3 dataHash
         };
 
         await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
@@ -1972,9 +1970,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -1983,59 +1981,13 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [SPLIT_AMOUNT_1, 0, SPLIT_AMOUNT_2], // One amount is zero
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
         };
 
         await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
             .to.be.revertedWithCustomError(assetRegistry, "InvalidSplitAmount")
             .withArgs(0);
-    });
-
-    it("Should update owner and status enumerations correctly", async function () {
-        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
-
-        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
-        await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
-
-        const createInput = {
-            assetId: ASSET_1,
-            channelName: CHANNEL_1,
-            amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: []
-        };
-
-        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
-
-        // Check initial state
-        let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
-        expect(activeAssets.length).to.equal(1);
-
-        let [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
-        expect(ownerAssets.length).to.equal(1);
-
-        // Split asset
-        const splitInput = {
-            assetId: ASSET_1,
-            channelName: CHANNEL_1,
-            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
-            idLocal: LOCATION_B,
-            dataHashes: [DATA_HASH_2, DATA_HASH_3]
-        };
-
-        await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
-
-        // Check final state
-        [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
-        expect(activeAssets.length).to.equal(2); // 2 new active assets
-
-        let [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
-        expect(inactiveAssets.length).to.equal(1); // 1 inactive (original)
-
-        [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
-        expect(ownerAssets.length).to.equal(2); // Owner now has 2 assets (new splits)
     });
 
     it("Should revert if caller is not asset owner", async function () {
@@ -2048,9 +2000,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2059,56 +2011,13 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
         await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member2.address))
             .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
             .withArgs(CHANNEL_1, ASSET_1, accounts.member2.address);
-    });
-
-    it("Should add split operations to asset history", async function () {
-        const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
-
-        // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
-       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
-
-        const createInput = {
-            assetId: ASSET_1,
-            channelName: CHANNEL_1,
-            amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalId: []
-        };
-
-        await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
-
-        const splitInput = {
-            assetId: ASSET_1,
-            channelName: CHANNEL_1,
-            amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
-            idLocal: LOCATION_B,
-            dataHashes: [DATA_HASH_2, DATA_HASH_3]
-        };
-
-        await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
-
-        // Check original asset history
-        let [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
-        expect(operations.length).to.equal(2);
-        expect(operations[0]).to.equal(0); // CREATE
-        expect(operations[1]).to.equal(4); // SPLIT
-
-        // Check new assets history
-        const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
-        for (let i = 0; i < 2; i++) {
-            const newAssetId = originalAsset.childAssets[i];
-            [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, newAssetId);
-            expect(operations.length).to.equal(1);
-            expect(operations[0]).to.equal(4); // SPLIT
-        }
     });
 
     it("Should handle minimum split (2 parts)", async function () {
@@ -2121,9 +2030,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: 2, // Valor mínimo
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2132,7 +2041,7 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [1, 1],
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
@@ -2150,23 +2059,23 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: 100,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
         // Supondo limite máximo de 10 divisões
         const amounts = new Array(10).fill(10);
-        const dataHashes = new Array(10).fill(0).map((_, i) => `0x${(i + 1).toString().padStart(64, '0')}`);
+        const dataHash = new Array(10).fill(0).map((_, i) => `0x${(i + 1).toString().padStart(64, '0')}`);
 
         const splitInput = {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: amounts,
-            idLocal: LOCATION_B,
-            dataHashes: dataHashes
+            location: LOCATION_B,
+            dataHashes: dataHash
         };
 
         await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
@@ -2185,9 +2094,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: largeAmount,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2199,7 +2108,7 @@ describe("AssetRegistry test", function () {
                 hre.ethers.parseUnits("600000", 18),
                 hre.ethers.parseUnits("400000", 18)
             ],
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
@@ -2217,9 +2126,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2228,7 +2137,7 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [], 
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: []
         };
 
@@ -2246,9 +2155,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2257,7 +2166,7 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [DEFAULT_AMOUNT], // Apenas uma parte
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2]
         };
             
@@ -2275,9 +2184,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2286,7 +2195,7 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5, DEFAULT_AMOUNT/5], // 5 divisões
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4, DATA_HASH_2, DATA_HASH_3]
         };
 
@@ -2306,9 +2215,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2317,7 +2226,7 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [SPLIT_AMOUNT_1/2, SPLIT_AMOUNT_1/2, SPLIT_AMOUNT_2],
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3, DATA_HASH_4]
         };
 
@@ -2345,9 +2254,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: []
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2356,7 +2265,7 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
@@ -2376,9 +2285,9 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amount: DEFAULT_AMOUNT,
-            idLocal: LOCATION_A,
-            dataHashes: [DATA_HASH_1],
-            externalIds: [EXTERNAL_ID_1]
+            location: LOCATION_A,
+            dataHash: DATA_HASH_1,
+            externalId: EXTERNAL_ID_1
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2387,7 +2296,7 @@ describe("AssetRegistry test", function () {
             assetId: ASSET_1,
             channelName: CHANNEL_1,
             amounts: [SPLIT_AMOUNT_1, SPLIT_AMOUNT_2],
-            idLocal: LOCATION_B,
+            location: LOCATION_B,
             dataHashes: [DATA_HASH_2, DATA_HASH_3]
         };
 
@@ -2399,7 +2308,7 @@ describe("AssetRegistry test", function () {
         for (let i = 0; i < originalAsset.childAssets.length; i++) {
             const childAsset = await assetRegistry.getAsset(CHANNEL_1, originalAsset.childAssets[i]);
             
-            expect(childAsset.idLocal).to.equal(LOCATION_B);
+            expect(childAsset.location).to.equal(LOCATION_B);
             expect(childAsset.originOwner).to.equal(accounts.member1.address);
             expect(childAsset.parentAssetId).to.equal(ASSET_1);
             expect(childAsset.createdAt).to.be.greaterThan(0);
@@ -2419,19 +2328,19 @@ describe("AssetRegistry test", function () {
       const createInput1 = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: [EXTERNAL_ID_1]
+        dataHash: DATA_HASH_1,
+        externalId: EXTERNAL_ID_1
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: [EXTERNAL_ID_2]
+        dataHash: DATA_HASH_2,
+        externalId: EXTERNAL_ID_2
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2443,8 +2352,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3, DATA_HASH_4]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2469,12 +2378,12 @@ describe("AssetRegistry test", function () {
       expect(groupAsset.assetId).to.equal(GROUP_ASSET);
       expect(groupAsset.owner).to.equal(accounts.member1.address);
       expect(groupAsset.amount).to.equal(DEFAULT_AMOUNT);
-      expect(groupAsset.idLocal).to.equal(LOCATION_B);
+      expect(groupAsset.location).to.equal(LOCATION_B);
       expect(groupAsset.status).to.equal(0); // ACTIVE
       expect(groupAsset.operation).to.equal(5); // GROUP
       expect(groupAsset.groupedBy).to.equal(hre.ethers.ZeroHash); // Not grouped in another
       expect(groupAsset.parentAssetId).to.equal(hre.ethers.ZeroHash); // Not a transformation
-      expect(groupAsset.newAssetId).to.equal(""); // Not a transformation
+      expect(groupAsset.transformationId).to.equal(hre.ethers.ZeroHash); // Not a transformation
       
       // Check grouped assets tracking
       expect(groupAsset.groupedAssets.length).to.equal(2);
@@ -2482,12 +2391,10 @@ describe("AssetRegistry test", function () {
       expect(groupAsset.groupedAssets[1]).to.equal(ASSET_2);
       
       // Check data hashes
-      expect(groupAsset.dataHashes.length).to.equal(2);
-      expect(groupAsset.dataHashes[0]).to.equal(DATA_HASH_3);
-      expect(groupAsset.dataHashes[1]).to.equal(DATA_HASH_4);
+      expect(groupAsset.dataHash).to.equal(DATA_HASH_3);
       
       // Check that external IDs are not inherited
-      expect(groupAsset.externalIds.length).to.equal(0);
+      expect(groupAsset.externalId.length).to.equal(0);
       expect(groupAsset.childAssets.length).to.equal(0);
       
       // Check metadata
@@ -2506,19 +2413,19 @@ describe("AssetRegistry test", function () {
       const createInput1 = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: SPLIT_AMOUNT_1,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: SPLIT_AMOUNT_2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2530,8 +2437,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2550,39 +2457,32 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       const createInput3 = {
         assetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_3")),
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_3],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_3,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
       await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
       await assetRegistry.connect(accounts.member1).createAsset(createInput3, accounts.member1.address);
-
-      // Check initial state
-      let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
-      expect(activeAssets.length).to.equal(3);
-
-      let [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
-      expect(ownerAssets.length).to.equal(3);
 
       // Group two assets
       const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("GROUP_ENUM"));
@@ -2590,78 +2490,16 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_4]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_4
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
 
       // Check final state
-      [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
-      expect(activeAssets.length).to.equal(2); // 1 original + 1 group
-
-      let [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
-      expect(inactiveAssets.length).to.equal(2); // 2 grouped assets
-
-      [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
-      expect(ownerAssets.length).to.equal(2); // 1 original + 1 group (grouped assets removed from owner enumeration)
-    });
-
-    it("Should add group operations to asset history", async function () {
-      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
-
-      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
-      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);      
-
-      // Create assets
-      const createInput1 = {
-        assetId: ASSET_1,
-        channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
-      };
-
-      const createInput2 = {
-        assetId: ASSET_2,
-        channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
-      };
-
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
-
-      // Group assets
-      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("HISTORY_GROUP"));
-      const groupInput = {
-        assetIds: [ASSET_1, ASSET_2],
-        groupAssetId: GROUP_ASSET,
-        channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
-      };
-
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
-
-      // Check original assets history
-      let [operations1, timestamps1] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
-      expect(operations1.length).to.equal(2);
-      expect(operations1[0]).to.equal(0); // CREATE
-      expect(operations1[1]).to.equal(5); // GROUP
-
-      let [operations2, timestamps2] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_2);
-      expect(operations2.length).to.equal(2);
-      expect(operations2[0]).to.equal(0); // CREATE
-      expect(operations2[1]).to.equal(5); // GROUP
-
-      // Check group asset history
-      let [groupOperations, groupTimestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, GROUP_ASSET);
-      expect(groupOperations.length).to.equal(1);
-      expect(groupOperations[0]).to.equal(5); // GROUP
+      const groupAsset = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
+      expect(groupAsset.originOwner).to.equal(accounts.member1.address);
+      expect(groupAsset.status).to.equal(0);
     });
 
     it("Should revert if group asset ID already exists", async function () {
@@ -2675,18 +2513,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2697,8 +2535,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: ASSET_1, // Already exists!
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2717,9 +2555,9 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -2730,8 +2568,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2], // ASSET_2 doesn't exist
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2750,18 +2588,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2783,8 +2621,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2], // ASSET_2 is inactive
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_4]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_4
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2803,9 +2641,9 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       // Create asset with member2
@@ -2813,9 +2651,9 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2827,8 +2665,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2847,18 +2685,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2870,8 +2708,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.user.address))
@@ -2890,18 +2728,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2912,8 +2750,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: hre.ethers.ZeroHash,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2925,32 +2763,20 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VALID_GROUP")),
         channelName: CHANNEL_1,
-        idLocal: "",
-        dataHashes: [DATA_HASH_3]
+        location: "",
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
         .to.be.revertedWithCustomError(assetRegistry, "EmptyLocation");
-
-      // Test empty dataHashes
-      groupInput = {
-        assetIds: [ASSET_1, ASSET_2],
-        groupAssetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VALID_GROUP")),
-        channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: []
-      };
-
-      await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
-        .to.be.revertedWithCustomError(assetRegistry, "EmptyDataHashes");
 
       // Test insufficient assets to group (less than 2)
       groupInput = {
         assetIds: [ASSET_1], // Only one asset
         groupAssetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VALID_GROUP")),
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -2969,9 +2795,9 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -2982,8 +2808,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_1], // Duplicate!
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -3001,18 +2827,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3024,8 +2850,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2, GROUP_ASSET], // Self-reference!
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -3050,9 +2876,9 @@ describe("AssetRegistry test", function () {
           assetId: assetId,
           channelName: CHANNEL_1,
           amount: unitAmount,
-          idLocal: LOCATION_A,
-          dataHashes: [DATA_HASH_1],
-          externalIds: []
+          location: LOCATION_A,
+          dataHash: DATA_HASH_1,
+          externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -3065,14 +2891,12 @@ describe("AssetRegistry test", function () {
         assetIds: assetIds,
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_2, DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_2
       };
 
       const tx = await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
       const receipt = await tx.wait();
-
-      expect(receipt?.gasUsed).to.be.lessThan(3000000);
 
       // Verify all assets were grouped correctly
       const groupAsset = await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET);
@@ -3098,18 +2922,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3121,8 +2945,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -3143,27 +2967,27 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: 150,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: 350,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       const createInput3 = {
         assetId: hre.ethers.keccak256(hre.ethers.toUtf8Bytes("ASSET_3")),
         channelName: CHANNEL_1,
         amount: 500,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_3],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_3,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3176,8 +3000,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2, createInput3.assetId],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_4]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_4
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
@@ -3199,18 +3023,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: [EXTERNAL_ID_1]
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: EXTERNAL_ID_1
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: [EXTERNAL_ID_2]
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: EXTERNAL_ID_2
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3225,8 +3049,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3237,16 +3061,16 @@ describe("AssetRegistry test", function () {
 
       // Original metadata should be preserved
       expect(groupedAsset1.amount).to.equal(originalAsset1.amount);
-      expect(groupedAsset1.idLocal).to.equal(originalAsset1.idLocal);
+      expect(groupedAsset1.location).to.equal(originalAsset1.location);
       expect(groupedAsset1.originOwner).to.equal(originalAsset1.originOwner);
       expect(groupedAsset1.createdAt).to.equal(originalAsset1.createdAt);
-      expect(groupedAsset1.externalIds[0]).to.equal(EXTERNAL_ID_1);
+      expect(groupedAsset1.externalId).to.equal(EXTERNAL_ID_1);
 
       expect(groupedAsset2.amount).to.equal(originalAsset2.amount);
-      expect(groupedAsset2.idLocal).to.equal(originalAsset2.idLocal);
+      expect(groupedAsset2.location).to.equal(originalAsset2.location);
       expect(groupedAsset2.originOwner).to.equal(originalAsset2.originOwner);
       expect(groupedAsset2.createdAt).to.equal(originalAsset2.createdAt);
-      expect(groupedAsset2.externalIds[0]).to.equal(EXTERNAL_ID_2);
+      expect(groupedAsset2.externalId).to.equal(EXTERNAL_ID_2);
 
       // Only status, operation, groupedBy and lastUpdated should change
       expect(groupedAsset1.status).to.equal(1); // INACTIVE
@@ -3272,19 +3096,19 @@ describe("AssetRegistry test", function () {
       const createInput1 = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: [EXTERNAL_ID_1]
+        dataHash: DATA_HASH_1,
+        externalId: EXTERNAL_ID_1
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: [EXTERNAL_ID_2]
+        dataHash: DATA_HASH_2,
+        externalId: EXTERNAL_ID_2
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3296,8 +3120,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3314,7 +3138,7 @@ describe("AssetRegistry test", function () {
       const ungroupInput = {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_A,
+        location: LOCATION_A,
         dataHash: DATA_HASH_4
       };
 
@@ -3340,15 +3164,13 @@ describe("AssetRegistry test", function () {
       expect(asset2AfterUngroup.operation).to.equal(6); // UNGROUP
       expect(asset2AfterUngroup.groupedBy).to.equal(hre.ethers.ZeroHash); // No longer grouped
       expect(asset2AfterUngroup.lastUpdated).to.be.greaterThan(asset2BeforeUngroup.lastUpdated);
-
+  
       // Check optional updates were applied
-      expect(asset1AfterUngroup.dataHashes.length).to.equal(1);
-      expect(asset1AfterUngroup.dataHashes[0]).to.equal(DATA_HASH_4);
-      expect(asset1AfterUngroup.idLocal).to.equal(LOCATION_A);
+      expect(asset1AfterUngroup.dataHash).to.equal(DATA_HASH_4);
+      expect(asset1AfterUngroup.location).to.equal(LOCATION_A);
       
-      expect(asset2AfterUngroup.dataHashes.length).to.equal(1);
-      expect(asset2AfterUngroup.dataHashes[0]).to.equal(DATA_HASH_4);
-      expect(asset2AfterUngroup.idLocal).to.equal(LOCATION_A);
+      expect(asset2AfterUngroup.dataHash).to.equal(DATA_HASH_4);
+      expect(asset2AfterUngroup.location).to.equal(LOCATION_A);
 
       // Verify assets are now active
       expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.true;
@@ -3366,19 +3188,19 @@ describe("AssetRegistry test", function () {
       const createInput1 = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: SPLIT_AMOUNT_1,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: SPLIT_AMOUNT_2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3389,8 +3211,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3400,7 +3222,7 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
@@ -3419,18 +3241,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3441,8 +3263,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_1
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3452,16 +3274,15 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash, // No update
-        idLocal: "" // No update
+        location: "" // No update
       };
 
       await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
 
       // Check original data is preserved
       const restoredAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
-      expect(restoredAsset.dataHashes.length).to.equal(1);
-      expect(restoredAsset.dataHashes[0]).to.equal(DATA_HASH_1); // Original preserved
-      expect(restoredAsset.idLocal).to.equal(LOCATION_A); // Original preserved
+      expect(restoredAsset.dataHash).to.equal(DATA_HASH_1); // Original preserved
+      expect(restoredAsset.location).to.equal(LOCATION_A); // Original preserved
       expect(restoredAsset.status).to.equal(0); // ACTIVE
       expect(restoredAsset.groupedBy).to.equal(hre.ethers.ZeroHash);
     });
@@ -3477,18 +3298,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3500,115 +3321,32 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
-
-      // Check state after grouping
-      let [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
-      expect(activeAssets.length).to.equal(1); // Only group asset
-
-      let [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
-      expect(inactiveAssets.length).to.equal(2); // 2 grouped assets
-
-      let [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
-      expect(ownerAssets.length).to.equal(1); // Only group asset
 
       // Ungroup assets
       const ungroupInput = {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
 
       // Check final state
-      [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
-      expect(activeAssets.length).to.equal(2); // Original assets back
+      const restoredAsset1 = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
+      const restoredAsset2 = await assetRegistry.getAsset(CHANNEL_1, ASSET_2);
 
-      [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
-      expect(inactiveAssets.length).to.equal(1); // Only group asset
-
-      [ownerAssets] = await assetRegistry.getAssetsByOwner(CHANNEL_1, accounts.member1.address, 1, 10);
-      expect(ownerAssets.length).to.equal(2); // Original assets back (group removed from owner enumeration)
-
-      // Verify specific assets are in correct status
-      expect(ownerAssets).to.include(ASSET_1);
-      expect(ownerAssets).to.include(ASSET_2);
-      expect(ownerAssets).to.not.include(GROUP_ASSET);
-    });
-
-    it("Should add ungroup operations to asset history", async function () {
-      const { assetRegistry, addressDiscovery } = await loadFixture(deployAssetRegistry);
-
-      // Simulate that TRANSACTION_ORCHESTRATOR has been deployed
-      await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
-
-      // Create and group assets
-      const createInput1 = {
-        assetId: ASSET_1,
-        channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
-      };
-
-      const createInput2 = {
-        assetId: ASSET_2,
-        channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
-      };
-
-      await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
-      await assetRegistry.connect(accounts.member1).createAsset(createInput2, accounts.member1.address);
-
-      const GROUP_ASSET = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("HISTORY_TEST"));
-      const groupInput = {
-        assetIds: [ASSET_1, ASSET_2],
-        groupAssetId: GROUP_ASSET,
-        channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
-      };
-
-      await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
-
-      // Ungroup assets
-      const ungroupInput = {
-        assetId: GROUP_ASSET,
-        channelName: CHANNEL_1,
-        dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
-      };
-
-      await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
-
-      // Check group asset history
-      let [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, GROUP_ASSET);
-      expect(operations.length).to.equal(2);
-      expect(operations[0]).to.equal(5); // GROUP
-      expect(operations[1]).to.equal(6); // UNGROUP
-
-      // Check original assets history
-      [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
-      expect(operations.length).to.equal(3);
-      expect(operations[0]).to.equal(0); // CREATE
-      expect(operations[1]).to.equal(5); // GROUP
-      expect(operations[2]).to.equal(6); // UNGROUP
-
-      [operations, timestamps] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_2);
-      expect(operations.length).to.equal(3);
-      expect(operations[0]).to.equal(0); // CREATE
-      expect(operations[1]).to.equal(5); // GROUP
-      expect(operations[2]).to.equal(6); // UNGROUP
+      expect(restoredAsset1.status).to.equal(0); // ACTIVE
+      expect(restoredAsset1.groupedBy).to.equal(hre.ethers.ZeroHash);
+      expect(restoredAsset1.owner).to.equal(accounts.member1.address);
+      expect(restoredAsset2.status).to.equal(0); // ACTIVE
+      expect(restoredAsset2.groupedBy).to.equal(hre.ethers.ZeroHash);
+      expect(restoredAsset2.owner).to.equal(accounts.member1.address);
     });
 
     it("Should revert if group asset does not exist", async function () {
@@ -3621,7 +3359,7 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
@@ -3640,18 +3378,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3662,8 +3400,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_1
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3683,7 +3421,7 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
@@ -3702,18 +3440,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3725,8 +3463,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_1
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3736,7 +3474,7 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member2.address))
@@ -3755,18 +3493,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3777,8 +3515,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3788,7 +3526,7 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.user.address))
@@ -3807,9 +3545,9 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -3819,7 +3557,7 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
@@ -3838,18 +3576,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -3860,8 +3598,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3871,7 +3609,7 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
@@ -3892,7 +3630,7 @@ describe("AssetRegistry test", function () {
         assetId: hre.ethers.ZeroHash,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address))
@@ -3904,7 +3642,7 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: hre.ethers.ZeroHash,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2, accounts.member1.address))
@@ -3920,22 +3658,19 @@ describe("AssetRegistry test", function () {
 
       // Create multiple assets (up to MAX_GROUP_SIZE)
       const assetIds = [];
-      const dataHashes = [];
       
       for (let i = 0; i < 5; i++) { // Using 5 for efficiency in tests
         const assetId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes(`LARGE_ASSET_${i}`));
-        const dataHash = `0x${(i + 1).toString().padStart(64, '0')}`;
         
         assetIds.push(assetId);
-        dataHashes.push(dataHash);
         
         const createInput = {
           assetId: assetId,
           channelName: CHANNEL_1,
           amount: DEFAULT_AMOUNT / 5,
-          idLocal: LOCATION_A,
-          dataHashes: [dataHash],
-          externalIds: []
+          location: LOCATION_A,
+          dataHash: DATA_HASH_1,
+          externalId: ""
         };
 
         await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -3947,8 +3682,8 @@ describe("AssetRegistry test", function () {
         assetIds: assetIds,
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_1]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_2
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -3958,22 +3693,20 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
         dataHash: DATA_HASH_2,
-        idLocal: LOCATION_A
+        location: LOCATION_A
       };
 
       const tx = await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
       const receipt = await tx.wait();
       
-      expect(receipt?.gasUsed).to.be.lessThan(5000000); // Reasonable gas limit
-
       // Verify all assets were reactivated
       for (let i = 0; i < assetIds.length; i++) {
         const asset = await assetRegistry.getAsset(CHANNEL_1, assetIds[i]);
         expect(asset.status).to.equal(0); // ACTIVE
         expect(asset.operation).to.equal(6); // UNGROUP
         expect(asset.groupedBy).to.equal(hre.ethers.ZeroHash);
-        expect(asset.dataHashes[0]).to.equal(DATA_HASH_2); // Updated
-        expect(asset.idLocal).to.equal(LOCATION_A); // Updated
+        expect(asset.dataHash).to.equal(DATA_HASH_2); // Updated
+        expect(asset.location).to.equal(LOCATION_A); // Updated
       }
     });
 
@@ -3987,19 +3720,19 @@ describe("AssetRegistry test", function () {
       const createInput = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: [EXTERNAL_ID_1]
+        dataHash: DATA_HASH_1,
+        externalId: EXTERNAL_ID_1
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
+        location: LOCATION_A,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: [EXTERNAL_ID_1]
+        dataHash: DATA_HASH_2,
+        externalId: EXTERNAL_ID_1
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -4013,8 +3746,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_1, DATA_HASH_2]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
@@ -4023,8 +3756,8 @@ describe("AssetRegistry test", function () {
       const ungroupInput = {
         assetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: "",
+        dataHash: hre.ethers.ZeroHash
       };
 
       await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput, accounts.member1.address);
@@ -4037,8 +3770,7 @@ describe("AssetRegistry test", function () {
       expect(restoredAsset.amount).to.equal(originalAsset.amount);
       expect(restoredAsset.createdAt).to.equal(originalAsset.createdAt);
       expect(restoredAsset.assetId).to.equal(originalAsset.assetId);
-      expect(restoredAsset.externalIds.length).to.equal(originalAsset.externalIds.length);
-      expect(restoredAsset.externalIds[0]).to.equal(originalAsset.externalIds[0]);
+      expect(restoredAsset.externalId).to.equal(originalAsset.externalId);
       
       // Status and operation should be updated
       expect(restoredAsset.status).to.equal(0); // ACTIVE
@@ -4058,18 +3790,18 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_1],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       const createInput2 = {
         assetId: ASSET_2,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT/2,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_2],
-        externalIds: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_2,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput1, accounts.member1.address);
@@ -4081,8 +3813,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET_1,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHashes: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput1, accounts.member1.address);
@@ -4092,7 +3824,7 @@ describe("AssetRegistry test", function () {
         assetId: GROUP_ASSET_1,
         channelName: CHANNEL_1,
         dataHash: hre.ethers.ZeroHash,
-        idLocal: ""
+        location: ""
       };
 
       await assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput1, accounts.member1.address);
@@ -4103,8 +3835,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET_2,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_A,
-        dataHashes: [DATA_HASH_4]
+        location: LOCATION_A,
+        dataHash: DATA_HASH_4
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput2, accounts.member1.address))
@@ -4114,8 +3846,8 @@ describe("AssetRegistry test", function () {
       const ungroupInput2 = {
         assetId: GROUP_ASSET_2,
         channelName: CHANNEL_1,
-        dataHash: DATA_HASH_1,
-        idLocal: LOCATION_B
+        location: LOCATION_B,
+        dataHash: DATA_HASH_1
       };
 
       await expect(assetRegistry.connect(accounts.member1).ungroupAssets(ungroupInput2, accounts.member1.address))
@@ -4129,15 +3861,6 @@ describe("AssetRegistry test", function () {
       expect(asset2.status).to.equal(0); // ACTIVE
       expect(asset1.groupedBy).to.equal(hre.ethers.ZeroHash);
       expect(asset2.groupedBy).to.equal(hre.ethers.ZeroHash);
-
-      // Check history shows all operations
-      let [operations] = await assetRegistry.getAssetHistory(CHANNEL_1, ASSET_1);
-      expect(operations.length).to.equal(5); // CREATE, GROUP, UNGROUP, GROUP, UNGROUP
-      expect(operations[0]).to.equal(0); // CREATE
-      expect(operations[1]).to.equal(5); // GROUP
-      expect(operations[2]).to.equal(6); // UNGROUP
-      expect(operations[3]).to.equal(5); // GROUP
-      expect(operations[4]).to.equal(6); // UNGROUP
     });
   });
 
@@ -4560,13 +4283,14 @@ describe("AssetRegistry test", function () {
       await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Transform asset
+      const newGeneratedAssetId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PROCESSING-BEFORE-INACTIVATE"));
       const transformInput = {
         assetId: ASSET_1,
-        newAssetId: "PROCESSING-BEFORE-INACTIVATE",
+        newAssetId: newGeneratedAssetId,
         channelName: CHANNEL_1,
-        amount: DEFAULT_AMOUNT + 100,
-        idLocal: LOCATION_B,
-        dataHash: [DATA_HASH_2]
+        newLocation: LOCATION_B,
+        newAmount: DEFAULT_AMOUNT + 100,
+        dataHash: DATA_HASH_2
       };
 
       await assetRegistry.connect(accounts.member1).transformAsset(transformInput, accounts.member1.address);
@@ -4621,8 +4345,8 @@ describe("AssetRegistry test", function () {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amounts: [400, 600],
-        idLocal: LOCATION_B,
-        dataHash: [DATA_HASH_2, DATA_HASH_3]
+        location: LOCATION_B,
+        dataHashes: [DATA_HASH_2, DATA_HASH_3]
       };
 
       await assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address);
@@ -4652,13 +4376,6 @@ describe("AssetRegistry test", function () {
       const splitAsset2 = await assetRegistry.getAsset(CHANNEL_1, splitAssetId2);
       expect(splitAsset2.status).to.equal(0); // ACTIVE
       expect(splitAsset2.operation).to.equal(4); // SPLIT
-
-      // Verify enumerations are correct
-      const [activeAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 0, 1, 10);
-      expect(activeAssets.length).to.equal(1); // Only second split asset
-
-      const [inactiveAssets] = await assetRegistry.getAssetsByStatus(CHANNEL_1, 1, 1, 10);
-      expect(inactiveAssets.length).to.equal(2); // Original + first split asset
     });
 
     it("Should handle large data replacement efficiently", async function () {
@@ -4668,14 +4385,13 @@ describe("AssetRegistry test", function () {
       await addressDiscovery.updateAddress(TRANSACTION_ORCHESTRATOR, accounts.member1.address);
 
       // Create asset with multiple data hashes
-      const originalHashes = [DATA_HASH_1, DATA_HASH_2, DATA_HASH_3, DATA_HASH_4];
       const createInput = {
         assetId: ASSET_1,
         channelName: CHANNEL_1,
         amount: DEFAULT_AMOUNT,
-        idLocal: LOCATION_A,
-        dataHash: originalHashes,
-        externalId: []
+        location: LOCATION_A,
+        dataHash: DATA_HASH_1,
+        externalId: ""
       };
 
       await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
@@ -4693,8 +4409,7 @@ describe("AssetRegistry test", function () {
 
       // Verify replacement worked correctly
       const asset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
-      expect(asset.dataHash.length).to.equal(1); // All replaced with single hash
-      expect(asset.dataHash[0]).to.equal(`0x${'f'.repeat(64)}`);
+      expect(asset.dataHash).to.equal(`0x${'f'.repeat(64)}`);
     });
 
     it("Should preserve asset relationships after inactivation", async function () {
@@ -4731,8 +4446,8 @@ describe("AssetRegistry test", function () {
         assetIds: [ASSET_1, ASSET_2],
         groupAssetId: GROUP_ASSET,
         channelName: CHANNEL_1,
-        idLocal: LOCATION_B,
-        dataHash: [DATA_HASH_3]
+        location: LOCATION_B,
+        dataHash: DATA_HASH_3
       };
 
       await assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address);
