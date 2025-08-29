@@ -31,12 +31,21 @@ interface IAssetRegistry {
         PARTIALLY_CONSUMED_ASSET //Partially consumed - 11
     }
 
+    enum RelationshipType {
+        CREATE,          // Asset creation (no parent)
+        SPLIT,           // Child came from splitting parent
+        TRANSFORM,       // Child is transformation of parent
+        GROUP_COMPONENT, // Child is component of a group (parent is group)
+        UNGROUP          // Child reactivated from group dissolution
+    }
+
     // =============================================================
     //                        STRUCTS
     // =============================================================
     
     struct Asset {
         bytes32 assetId;              // Unique sequential asset ID
+        bytes32 channelName;          // Channel for permissions
         address owner;                // Current owner
         string location;              // Physical location
         uint256 amount;               // Physical quantity
@@ -152,47 +161,6 @@ interface IAssetRegistry {
     }
 
     // =============================================================
-    //                    RELATIONSHIP TYPES
-    // =============================================================
-
-    /**
-     * @notice Enumeration of asset relationship types for lineage tracking
-     */
-    enum RelationshipType {
-        SPLIT,           // Child came from splitting parent
-        TRANSFORM,       // Child is transformation of parent
-        GROUP_COMPONENT, // Child is component of a group (parent is group)
-        UNGROUP          // Child reactivated from group dissolution
-    }
-
-    // =============================================================
-    //                    LINEAGE STRUCTURES
-    // =============================================================
-
-    /**
-    * @notice Structure to represent asset lineage information
-    */
-    struct LineageNode {
-        bytes32 assetId;
-        bytes32[] parents;
-        bytes32[] children;
-        uint8 depth;
-        RelationshipType relationshipType;
-        uint256 timestamp;
-    }
-
-    /**
-    * @notice Structure for complex asset composition tracking
-    */
-    struct AssetCompositionData {
-        bytes32[] componentAssets;
-        uint256[] componentAmounts;
-        uint256[] componentPercentages;
-        uint256 lastUpdated;
-        bool isActive;
-    }
-
-    // =============================================================
     //                        EVENTS
     // =============================================================
 
@@ -230,6 +198,8 @@ interface IAssetRegistry {
         address toOwner,
         string previousLocation,
         string newLocation,
+        uint256 previousAmount,
+        uint256 newAmount,
         uint256 timestamp
     );
 
@@ -288,47 +258,14 @@ interface IAssetRegistry {
     // =============================================================
     //                    ENHANCED EVENTS
     // =============================================================
-
-    /**
-     * @notice Emitted when a parent-child relationship is established between assets
-     * @param channelName The channel where the assets exist
-     * @param childAssetId The ID of the child asset
-     * @param parentAssetId The ID of the parent asset
-     * @param relationshipType Type of relationship: 0=SPLIT, 1=TRANSFORM, 2=GROUP_COMPONENT
-     * @param timestamp When the relationship was established
-     */
     event AssetLineage(
         bytes32 indexed channelName,
         bytes32 indexed childAssetId,
         bytes32 indexed parentAssetId,
-        uint8 relationshipType,  // SPLIT, TRANSFORM, GROUP_COMPONENT only
+        uint8 relationshipType, 
         uint256 timestamp
     );
 
-    /**
-     * @notice Emitted when multiple assets are related in a single operation
-     * @param channelName The channel where the operation occurred
-     * @param primaryAssetId The main asset involved (e.g., group asset or split origin)
-     * @param relatedAssets Array of related asset IDs
-     * @param operationType The operation type that created this relationship
-     * @param blockNumber Block when the relationship was created
-     */
-    event AssetRelationship(
-        bytes32 indexed channelName,
-        bytes32 indexed primaryAssetId,
-        bytes32[] relatedAssets,
-        uint8 operationType,
-        uint256 blockNumber
-    );
-
-    /**
-     * @notice Emitted when an asset's composition changes (for complex blends)
-     * @param channelName The channel where the asset exists
-     * @param assetId The asset whose composition changed
-     * @param componentAssets Array of component asset IDs
-     * @param componentAmounts Array of amounts for each component
-     * @param timestamp When the composition was recorded
-     */
     event AssetComposition(
         bytes32 indexed channelName,
         bytes32 indexed assetId,
@@ -337,22 +274,6 @@ interface IAssetRegistry {
         uint256 timestamp
     );
 
-    /**
-     * @notice Emitted when an asset reaches a specific depth in the transformation chain
-     * @param channelName The channel where the asset exists
-     * @param assetId The asset ID
-     * @param depth The depth level (0 = origin, 1+ = transformations)
-     * @param originAssets Array of origin asset IDs that this asset traces back to
-     */
-    event AssetDepthCalculated(
-        bytes32 indexed channelName,
-        bytes32 indexed assetId,
-        uint8 depth,
-        bytes32[] originAssets
-    );
-
-
-    // CUSTODY TRACKING (Ownership changes)  
     event AssetCustodyChanged(
         bytes32 indexed channelName,
         bytes32 indexed assetId,
@@ -362,7 +283,6 @@ interface IAssetRegistry {
         uint256 timestamp
     );
 
-    // STATE TRACKING (Metadata changes)
     event AssetStateChanged(
         bytes32 indexed channelName,
         bytes32 indexed assetId,
@@ -372,24 +292,6 @@ interface IAssetRegistry {
         uint256 newAmount,
         uint256 timestamp
     );
-
-    // COMPOSITION TRACKING
-    event AssetCompositionDissolved(
-        bytes32 indexed channelName,
-        bytes32 indexed groupAssetId,
-        bytes32[] dissolvedAssets,
-        uint256 timestamp
-    );
-
-    // COMPOSITION TRACKING (SPLIT)
-    event AssetSplitComposition(
-        bytes32 indexed channelName,
-        bytes32 indexed originalAssetId,
-        bytes32[] splitAssets,
-        uint256[] splitAmounts,
-        uint256 timestamp
-    );
-
     
     // =============================================================
     //                        ERRORS
@@ -414,14 +316,11 @@ interface IAssetRegistry {
     error SelfReferenceInGroup(bytes32 assetId);
     error MixedOwnershipNotAllowed(address expected, address found);
     error AssetNotGrouped(bytes32 assetId);
-    error AssetAlreadyUngrouped(bytes32 assetId);
-    error GroupedAssetNotFound(bytes32 groupAssetId, bytes32 childAssetId);
     error TransformationChainTooDeep(uint256 current, uint256 maximum);
     error InsufficientSplitParts(uint256 provided, uint8 minimum);
     error TooManyAssetsForDuplicateCheck(uint256 provided, uint256 maximum);
     error OnlyTransactionOrchestrator();
-    error InvalidGroupRelationship(bytes32 childAssetId, bytes32 expectedGroupId);
-    error GroupedAssetNotInactive(bytes32 childAssetId);
+    error AssetAlreadyUngrouped(bytes32 assetId);
 
     // =============================================================
     //                    ASSET REGISTRY
@@ -496,13 +395,4 @@ interface IAssetRegistry {
      */
     function getAsset(bytes32 channelName, bytes32 assetId) 
         external view returns (Asset memory asset);
-
-    /**
-     * Check if asset exists and is active
-     * @param channelName Channel name
-     * @param assetId Asset identifier
-     * @return active True if asset exists and is active
-     */
-    function isAssetActive(bytes32 channelName, bytes32 assetId) 
-        external view returns (bool active);
 }

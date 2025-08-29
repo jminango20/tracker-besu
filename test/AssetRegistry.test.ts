@@ -265,7 +265,7 @@ describe("AssetRegistry test", function () {
       expect(asset.childAssets.length).to.equal(0);
 
       // Check active status
-      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.true;
+      expect((await assetRegistry.getAsset(CHANNEL_1, ASSET_1)).status).to.equal(0);
     });
   });
 
@@ -717,7 +717,17 @@ describe("AssetRegistry test", function () {
 
       await expect(assetRegistry.connect(accounts.member1).transferAsset(transferInput, accounts.member1.address))
         .to.emit(assetRegistry, "AssetTransferred")
-        .withArgs(CHANNEL_1, ASSET_1, accounts.member1.address, accounts.member2.address, LOCATION_A, LOCATION_B, anyValue);
+        .withArgs(
+          CHANNEL_1, 
+          ASSET_1, 
+          accounts.member1.address, 
+          accounts.member2.address, 
+          LOCATION_A, 
+          LOCATION_B,
+          createInput.amount,
+          transferInput.newAmount,
+          anyValue
+        );
     });
 
     it("Should update owner enumeration mappings correctly", async function () {
@@ -1174,7 +1184,9 @@ describe("AssetRegistry test", function () {
           accounts.member1.address,  // fromOwner (current owner)
           accounts.member2.address,  // toOwner (new owner)
           LOCATION_A,
-          LOCATION_B, 
+          LOCATION_B,
+          DEFAULT_AMOUNT,
+          DEFAULT_AMOUNT,
           anyValue
         );
 
@@ -1207,6 +1219,8 @@ describe("AssetRegistry test", function () {
           accounts.deployer.address, // toOwner (new owner)
           LOCATION_B,
           LOCATION_A, 
+          DEFAULT_AMOUNT,
+          DEFAULT_AMOUNT,
           anyValue
         );
 
@@ -1986,8 +2000,8 @@ describe("AssetRegistry test", function () {
         };
 
         await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
-            .to.be.revertedWithCustomError(assetRegistry, "InvalidSplitAmount")
-            .withArgs(0);
+            .to.be.revertedWithCustomError(assetRegistry, "SplitAmountTooSmall")
+            .withArgs(0, 1);
     });
 
     it("Should revert if caller is not asset owner", async function () {
@@ -2142,7 +2156,7 @@ describe("AssetRegistry test", function () {
         };
 
         await expect(assetRegistry.connect(accounts.member1).splitAsset(splitInput, accounts.member1.address))
-            .to.be.revertedWithCustomError(assetRegistry, "EmptyAmountsArray");
+            .to.be.revertedWithCustomError(assetRegistry, "InsufficientSplitParts");
     });
 
     it("Should revert with single amount (meaningless split)", async function () {
@@ -2540,8 +2554,8 @@ describe("AssetRegistry test", function () {
       };
 
       await expect(assetRegistry.connect(accounts.member1).groupAssets(groupInput, accounts.member1.address))
-        .to.be.revertedWithCustomError(assetRegistry, "GroupAssetAlreadyExists")
-        .withArgs(ASSET_1);
+        .to.be.revertedWithCustomError(assetRegistry, "AssetAlreadyExists")
+        .withArgs(CHANNEL_1, ASSET_1);
     });
 
     it("Should revert if any asset to group does not exist", async function () {
@@ -3173,9 +3187,9 @@ describe("AssetRegistry test", function () {
       expect(asset2AfterUngroup.location).to.equal(LOCATION_A);
 
       // Verify assets are now active
-      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.true;
-      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_2)).to.be.true;
-      expect(await assetRegistry.isAssetActive(CHANNEL_1, GROUP_ASSET)).to.be.false;
+      expect((await assetRegistry.getAsset(CHANNEL_1, ASSET_1)).status).to.equal(0); // ACTIVE
+      expect((await assetRegistry.getAsset(CHANNEL_1, ASSET_2)).status).to.equal(0);
+      expect((await assetRegistry.getAsset(CHANNEL_1, GROUP_ASSET)).status).to.equal(1);
     });
 
     it("Should emit AssetsUngrouped event", async function () {
@@ -3884,7 +3898,7 @@ describe("AssetRegistry test", function () {
       await assetRegistry.connect(accounts.member1).createAsset(createInput, accounts.member1.address);
 
       // Verify asset is initially active
-      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.true;
+      expect((await assetRegistry.getAsset(CHANNEL_1, ASSET_1)).status).to.equal(0);
       
       const originalAsset = await assetRegistry.getAsset(CHANNEL_1, ASSET_1);
       expect(originalAsset.status).to.equal(0); // ACTIVE
@@ -3920,7 +3934,7 @@ describe("AssetRegistry test", function () {
       expect(inactivatedAsset.externalId).to.equal(EXTERNAL_ID_1);
 
       // Verify asset is no longer active
-      expect(await assetRegistry.isAssetActive(CHANNEL_1, ASSET_1)).to.be.false;
+      expect((await assetRegistry.getAsset(CHANNEL_1, ASSET_1)).status).to.equal(1);
     });
 
     it("Should emit AssetInactivated event", async function () {
