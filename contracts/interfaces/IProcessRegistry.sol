@@ -101,8 +101,7 @@ interface IProcessRegistry {
     error SchemaNotFoundInChannel(bytes32 channelName, bytes32 schemaId, uint256 version);
     error DescriptionTooLong();
     error InvalidProcessStatusTransition(ProcessStatus current, ProcessStatus newStatus, string reason);
-    error FunctionCallFailed();
-
+    
     // =============================================================
     //                    PROCESS MANAGEMENT
     // =============================================================
@@ -160,36 +159,6 @@ interface IProcessRegistry {
         bytes32 natureId,
         bytes32 stageId
     ) external view returns (Process memory process);
-
-    /**
-     * Get process status quickly
-     * @param channelName Channel name
-     * @param processId Process identifier
-     * @param natureId Nature identifier
-     * @param stageId Stage identifier
-     * @return status Current process status
-     */
-    function getProcessStatus(
-        bytes32 channelName,
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId
-    ) external view returns (ProcessStatus status);
-
-    /**
-     * Checks if a process exists and is active
-     * @param channelName Channel name
-     * @param processId Process identifier
-     * @param natureId Nature identifier
-     * @param stageId Stage identifier
-     * @return active Whether the process is active
-     */
-    function isProcessActive(
-        bytes32 channelName,
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId
-    ) external view returns (bool active);
 
     // =============================================================
     // FUNCTION TO BE CALLED BY PROCESS SUBMISSION

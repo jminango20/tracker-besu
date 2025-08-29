@@ -29,18 +29,6 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
      */
     mapping(bytes32 => mapping(bytes32 => mapping(bytes32 => mapping(bytes32 => Process)))) private _processes;
 
-    /**
-     * Track active process keys for uniqueness validation
-     * @dev channelName => processId => natureId => stageId => isActive 
-     */
-    mapping(bytes32 => mapping(bytes32 => mapping(bytes32 => mapping(bytes32 => bool)))) private _activeProcessKeys;
-
-    /**
-     * Track processes existence for uniqueness validation
-     * @dev channelName => processId => natureId => stageId => exists
-     */
-    mapping(bytes32 => mapping(bytes32 => mapping(bytes32 => mapping(bytes32 => bool)))) private _processesExists;
-
     // =============================================================
     //                       CONSTRUCTOR
     // =============================================================
@@ -66,22 +54,8 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
 
         _validateIds(processInput.processId, processInput.natureId, processInput.stageId);
         _validateDescription(processInput.description);
+        _validateProcessNotExists(processInput.channelName, processInput.processId, processInput.natureId, processInput.stageId);
         
-        // Verificar unicidade
-        if (_processExists(
-                processInput.channelName, 
-                processInput.processId, 
-                processInput.natureId, 
-                processInput.stageId)
-            ) {
-            revert ProcessAlreadyExists(
-                processInput.channelName,
-                processInput.processId,
-                processInput.natureId,
-                processInput.stageId
-            );
-        }
-
         uint256 schemasLength = processInput.schemas.length;
         _validateActionRequiresSchemas(processInput.action, schemasLength);
 
@@ -90,10 +64,7 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         }
 
         _createProcessInStorage(processInput);
-        
-        _activeProcessKeys[processInput.channelName][processInput.processId][processInput.natureId][processInput.stageId] = true;
-        _processesExists[processInput.channelName][processInput.processId][processInput.natureId][processInput.stageId] = true;
-     
+             
         emit ProcessCreated(
             processInput.processId,
             processInput.natureId,
@@ -168,61 +139,12 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         external 
         view 
         validChannelName(channelName)
-        returns (Process memory process) 
+        returns (Process memory) 
     {
         _validateIds(processId, natureId, stageId);
         
-        if (!_processExists(channelName, processId, natureId, stageId)) {
-            revert ProcessNotFound(channelName, processId);
-        }
-
-        return _processes[channelName][processId][natureId][stageId];
-    }
-
-    /**
-     * @inheritdoc IProcessRegistry
-     */
-    function getProcessStatus(
-        bytes32 channelName,
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId
-    ) 
-        external 
-        view 
-        validChannelName(channelName)
-        returns (ProcessStatus status) 
-    {
-        _validateIds(processId, natureId, stageId); 
-
-        if (!_processExists(channelName, processId, natureId, stageId)) {
-            revert ProcessNotFound(channelName, processId);
-        }
-
-        return _processes[channelName][processId][natureId][stageId].status;        
-    }
-
-    /**
-     * @inheritdoc IProcessRegistry
-     */
-    function isProcessActive(
-     bytes32 channelName,
-        bytes32 processId,
-        bytes32 natureId,
-        bytes32 stageId
-    ) 
-        external 
-        view 
-        validChannelName(channelName)
-        returns (bool active) 
-    {
-        _validateIds(processId, natureId, stageId);
-
-        if (!_processExists(channelName, processId, natureId, stageId)) {
-            revert ProcessNotFound(channelName, processId);
-        }
-
-        return _activeProcessKeys[channelName][processId][natureId][stageId];
+        Process storage process = _getExistingProcess(channelName, processId, natureId, stageId);
+        return process;
     }
 
     /**
@@ -244,44 +166,15 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         _validateChannel(channelName);
         _validateIds(processId, natureId, stageId);
 
-        // Check se processo existe        
-        if (!_processExists(channelName, processId, natureId, stageId)) {
-            return (false, "Process not found");
-        }
+        Process storage process = _getExistingProcess(channelName, processId, natureId, stageId);
 
         // Check se processo está ativo
-        Process storage process = _processes[channelName][processId][natureId][stageId];
         if (process.status != ProcessStatus.ACTIVE) {
             return (false, "Process not active");
         }
 
         // Validar schemas ainda ativos
         return _validateSchemasForSubmission(channelName, process.schemas);
-    }
-
-    /**
-     * @dev External function for schema validation (enables try/catch)
-     */
-    function _validateSchemasForSubmission(
-        bytes32 channelName,
-        SchemaReference[] memory schemas
-    ) internal view returns (bool isValid, string memory errorMessage) {
-        ISchemaRegistry schemaRegistry = ISchemaRegistry(
-            _getAddressDiscovery().getContractAddress(SCHEMA_REGISTRY)
-        );
-        
-        for (uint256 i = 0; i < schemas.length; i++) {
-            try schemaRegistry.getSchemaByVersion(
-                channelName, schemas[i].schemaId, schemas[i].version
-            ) returns (ISchemaRegistry.Schema memory schema) {
-                if (schema.status == ISchemaRegistry.SchemaStatus.INACTIVE) {
-                    return (false, "Schema not active");
-                }
-            } catch {
-                 return (false, "Schema not found");
-            }
-        }
-        return (true, "Process valid for submission");
     }
 
     // =============================================================
@@ -318,30 +211,17 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         ProcessStatus newStatus
     ) internal {
         _validateIds(processId, natureId, stageId);
-          
-        // Verificar se processo existe
-        if (!_processExists(channelName, processId, natureId, stageId)) {
-            revert ProcessNotFound(channelName, processId);
-        }
 
-        Process storage process = _processes[channelName][processId][natureId][stageId];
+        Process storage process = _getExistingProcess(channelName, processId, natureId, stageId);
+        _validateProcessOwnership(process);
 
-        // Verificar ownership
-        if (process.owner != _msgSender()) {
-            revert NotProcessOwner(channelName, processId, _msgSender());
-        }
-
-        ProcessStatus oldStatus = process.status;
-        
+        ProcessStatus oldStatus = process.status;        
         _validateProcessStatusTransition(oldStatus, newStatus);
 
         // Atualizar status
         process.status = newStatus;
         process.lastUpdated = Utils.timestamp();
         
-        // Atualizar index de ativos
-        _activeProcessKeys[channelName][processId][natureId][stageId] = (newStatus == ProcessStatus.ACTIVE);
-
         emit ProcessStatusChanged(
             processId, 
             channelName, 
@@ -352,9 +232,85 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
         );
     }
 
+    function _getExistingProcess(
+        bytes32 channelName, 
+        bytes32 processId, 
+        bytes32 natureId, 
+        bytes32 stageId
+    ) internal view returns (Process storage) {
+        Process storage process = _processes[channelName][processId][natureId][stageId];
+        
+        // Check if process exists by checking if owner is set
+        if (process.owner == address(0)) {
+            revert ProcessNotFound(channelName, processId);
+        }
+        
+        return process;
+    }
+
+    function _validateSchemasForSubmission(
+        bytes32 channelName,
+        SchemaReference[] memory schemas
+    ) internal view returns (bool isValid, string memory errorMessage) {
+        ISchemaRegistry schemaRegistry = ISchemaRegistry(
+            _getAddressDiscovery().getContractAddress(SCHEMA_REGISTRY)
+        );
+        
+        for (uint256 i = 0; i < schemas.length; i++) {
+            try schemaRegistry.getSchemaByVersion(
+                channelName, schemas[i].schemaId, schemas[i].version
+            ) returns (ISchemaRegistry.Schema memory schema) {
+                if (schema.status == ISchemaRegistry.SchemaStatus.INACTIVE) {
+                    return (false, "Schema not active");
+                }
+            } catch {
+                 return (false, "Schema not found");
+            }
+        }
+        return (true, "Process valid for submission");
+    }
+
     // =============================================================
-    //                    VALIDATION FUNCTIONS
+    //                    INTERNAL VALIDATION FUNCTIONS
     // =============================================================
+    function _validateIds(bytes32 processId, bytes32 natureId, bytes32 stageId) internal pure {
+        if (processId == bytes32(0)) revert InvalidProcessId();
+        if (natureId == bytes32(0)) revert InvalidNatureId();
+        if (stageId == bytes32(0)) revert InvalidStageId();
+    }
+
+    function _validateDescription(string calldata description) internal pure {
+        if (bytes(description).length > MAX_STRING_LENGTH) revert DescriptionTooLong();
+    }
+
+    function _validateProcessNotExists(
+        bytes32 channelName, 
+        bytes32 processId, 
+        bytes32 natureId, 
+        bytes32 stageId
+    ) internal view {
+        Process storage process = _processes[channelName][processId][natureId][stageId];
+        if (process.owner != address(0)) {
+            revert ProcessAlreadyExists(channelName, processId, natureId, stageId);
+        }
+    }
+
+    function _validateProcessOwnership(Process storage process) internal view {
+        if (process.owner != _msgSender()) {
+            revert NotProcessOwner(process.channelName, process.processId, _msgSender());
+        }
+    }
+
+    function _validateActionRequiresSchemas(ProcessAction action, uint256 schemasLength) internal pure {
+        if (action == ProcessAction.CREATE_ASSET || 
+            action == ProcessAction.CREATE_DOCUMENT || 
+            action == ProcessAction.UPDATE_ASSET) {
+            if (schemasLength == 0) {
+                revert SchemasRequiredForAction(action);
+            }
+        }        
+    }
+
     function _validateProcessStatusTransition(
         ProcessStatus current, 
         ProcessStatus newStatus
@@ -384,30 +340,6 @@ contract ProcessRegistry is Context, BaseTraceContract, IProcessRegistry {
             return (false, "Channel is not active");
         }
                 
-    }
-
-    function _validateIds(bytes32 processId, bytes32 natureId, bytes32 stageId) internal pure {
-        if (processId == bytes32(0)) revert InvalidProcessId();
-        if (natureId == bytes32(0)) revert InvalidNatureId();
-        if (stageId == bytes32(0)) revert InvalidStageId();
-    }
-
-    function _processExists(bytes32 channelName, bytes32 processId, bytes32 natureId, bytes32 stageId) private view returns (bool) {
-        return _processesExists[channelName][processId][natureId][stageId];
-    }
-
-    function _validateDescription(string calldata description) internal pure {
-        if (bytes(description).length > MAX_STRING_LENGTH) revert DescriptionTooLong();
-    }
-
-    function _validateActionRequiresSchemas(ProcessAction action, uint256 schemasLength) internal pure {
-        if (action == ProcessAction.CREATE_ASSET || 
-            action == ProcessAction.CREATE_DOCUMENT || 
-            action == ProcessAction.UPDATE_ASSET) {
-            if (schemasLength == 0) {
-                revert SchemasRequiredForAction(action);
-            }
-        }        
     }
 
     function _validateSchemas(bytes32 channelName, SchemaReference[] calldata schemas) internal view {

@@ -172,13 +172,13 @@ describe("ProcessRegistry test", function () {
           anyValue
         );
         
-        const status = await processRegistry.getProcessStatus(
+        const process = await processRegistry.getProcess(
           processInputWithSchemas.channelName,
           processInputWithSchemas.processId,
           processInputWithSchemas.natureId,
           processInputWithSchemas.stageId,
         );
-        expect(status).to.equal(1); // INACTIVE
+        expect(process.status).to.equal(1); // INACTIVE
       });
 
       it("Should revert if caller is not process owner", async function () {
@@ -553,14 +553,14 @@ describe("ProcessRegistry test", function () {
 
         await processRegistry.connect(member1).createProcess(processInputWithSchemas);
 
-        const status = await processRegistry.getProcessStatus(
+        const process = await processRegistry.getProcess(
           processInputWithSchemas.channelName,
           processInputWithSchemas.processId,
           processInputWithSchemas.natureId,
           processInputWithSchemas.stageId
         );
         
-        expect(status).to.equal(0); // ACTIVE
+        expect(process.status).to.equal(0); // ACTIVE
       });
 
       it("Should return updated status after change", async function () {
@@ -575,14 +575,14 @@ describe("ProcessRegistry test", function () {
           processInputWithSchemas.stageId
         );
 
-        const status = await processRegistry.getProcessStatus(
+        const status = await processRegistry.getProcess(
           processInputWithSchemas.channelName,
           processInputWithSchemas.processId,
           processInputWithSchemas.natureId,
           processInputWithSchemas.stageId
         );
         
-        expect(status).to.equal(1); // INACTIVE
+        expect(status.status).to.equal(1); // INACTIVE
       });
     });
 
@@ -592,14 +592,14 @@ describe("ProcessRegistry test", function () {
 
         await processRegistry.connect(member1).createProcess(processInputWithSchemas);
 
-        const isActive = await processRegistry.connect(member1).isProcessActive(
+        const isActive = await processRegistry.connect(member1).getProcess(
           processInputWithSchemas.channelName,
           processInputWithSchemas.processId,
           processInputWithSchemas.natureId,
           processInputWithSchemas.stageId
         );
 
-        expect(isActive).to.be.true;
+        expect(isActive.status).to.equal(0);
       });
 
       it("Should return false for inactive process", async function () {
@@ -614,14 +614,14 @@ describe("ProcessRegistry test", function () {
           processInputWithSchemas.stageId
         );
 
-        const isActive = await processRegistry.connect(member1).isProcessActive(
+        const isActive = await processRegistry.connect(member1).getProcess(
           processInputWithSchemas.channelName,
           processInputWithSchemas.processId,
           processInputWithSchemas.natureId,
           processInputWithSchemas.stageId,
         );
 
-        expect(isActive).to.be.false;
+        expect(isActive.status).to.equal(1);
       });
     });
 
@@ -753,15 +753,14 @@ describe("ProcessRegistry test", function () {
     it("Should reject non-existent process", async function () {
       const { processRegistry } = await loadFixture(deployProcessRegistry);
 
-      const [isValid, reason] = await processRegistry.validateProcessForSubmission(
+      await expect(processRegistry.validateProcessForSubmission(
         CHANNEL_1,
         NON_EXISTENT_PROCESS,
         NATURE_1,
         STAGE_1,
-      );
+        )
+      ).to.be.revertedWithCustomError(processRegistry, "ProcessNotFound");
 
-      expect(isValid).to.be.false;
-      expect(reason).to.equal("Process not found");
     });
 
     it("Should reject inactive process", async function () {
@@ -1057,13 +1056,13 @@ describe("ProcessRegistry test", function () {
       await processRegistry.connect(member1).createProcess(processInputWithSchemas);
 
       // Check it's active
-      let isActive = await processRegistry.connect(member1).isProcessActive(
+      let process = await processRegistry.connect(member1).getProcess(
         processInputWithSchemas.channelName,
         processInputWithSchemas.processId,
         processInputWithSchemas.natureId,
         processInputWithSchemas.stageId,
       );
-      expect(isActive).to.be.true;
+      expect(process.status).to.equal(0); // ACTIVE;
 
       // Create different combination with same processId
       const processWithDifferentNature = {
@@ -1073,13 +1072,13 @@ describe("ProcessRegistry test", function () {
       await processRegistry.connect(member1).createProcess(processWithDifferentNature);
 
       // Both should be active with their specific combinations
-      isActive = await processRegistry.connect(member1).isProcessActive(
+      process = await processRegistry.connect(member1).getProcess(
         processWithDifferentNature.channelName,
         processWithDifferentNature.processId,
         processWithDifferentNature.natureId,
         processWithDifferentNature.stageId,
       );
-      expect(isActive).to.be.true;
+      expect(process.status).to.equal(0); // ACTIVE;
 
       // Inactivate first one
       await processRegistry.connect(member1).inactivateProcess(
@@ -1090,21 +1089,21 @@ describe("ProcessRegistry test", function () {
       );
 
       // First should be inactive, second should still be active
-      isActive = await processRegistry.connect(member1).isProcessActive(
+      process = await processRegistry.connect(member1).getProcess(
         processInputWithSchemas.channelName,
         processInputWithSchemas.processId,
         processInputWithSchemas.natureId,
         processInputWithSchemas.stageId
       );
-      expect(isActive).to.be.false;
+      expect(process.status).to.equal(1); // INACTIVE;
 
-      isActive = await processRegistry.connect(member1).isProcessActive(
+      process = await processRegistry.connect(member1).getProcess(
         processWithDifferentNature.channelName,
         processWithDifferentNature.processId,
         processWithDifferentNature.natureId,
         processWithDifferentNature.stageId
       );
-      expect(isActive).to.be.true;
+      expect(process.status).to.equal(0); // INACTIVE;
     });
   });
 });
