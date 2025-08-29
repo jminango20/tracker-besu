@@ -38,7 +38,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
      * Asset counter by channel for deterministic IDs (only business-critical storage)
      * @dev channelName => assetCounter
      */
-    mapping(bytes32 => uint256) private _assetCounterByChannel;    
+    mapping(bytes32 => uint256) private _assetCounters;    
 
     // =============================================================
     //                       CONSTRUCTOR
@@ -64,75 +64,33 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         validChannelName(request.channelName)
         onlyChannelMember(request.channelName)
     {
-        IAddressDiscovery addressDiscovery = IAddressDiscovery(_getAddressDiscovery());
+        _validateRequest(request);
 
-        IProcessRegistry processRegistry = IProcessRegistry(
-            addressDiscovery.getContractAddress(PROCESS_REGISTRY)
-        );
+        IProcessRegistry processRegistry = IProcessRegistry(_getRegistry(PROCESS_REGISTRY));
+        IAssetRegistry assetRegistry = IAssetRegistry(_getRegistry(ASSET_REGISTRY));
 
-        IAssetRegistry assetRegistry = IAssetRegistry(
-            addressDiscovery.getContractAddress(ASSET_REGISTRY)
-        );
-
-        _validateRequestFields(request);
         _validateProcess(request, processRegistry);
         
-        bytes32[] memory affectedAssets = _routeAndExecuteOperation(
+        bytes32[] memory affectedAssets = _executeOperation(
             request, 
             processRegistry, 
             assetRegistry
         );  
         
-        //Get process for operation mapping
-        IProcessRegistry.Process memory process = _getProcess(request, processRegistry);
-        IAssetRegistry.AssetOperation operation = _mapProcessActionToAssetOperation(process.action);
-        
-        //Emit events for tracking
-        emit OperationExecuted(
-            request.channelName,
-            request.processId,
-            request.natureId,
-            request.stageId,
-            _msgSender(),
-            affectedAssets,
-            operation,
-            block.number,
-            Utils.timestamp()
-        );
-        
-        emit ProcessExecuted(
-            request.channelName,
-            request.processId,
-            request.natureId,
-            request.stageId,
-            _msgSender(),
-            Utils.timestamp()
-        );
-        
-        //Emit asset-specific events for efficient queries
-        for (uint256 i = 0; i < affectedAssets.length; i++) {
-            emit AssetModified(
-                request.channelName,
-                affectedAssets[i],
-                _msgSender(),
-                operation,
-                block.number,
-                Utils.timestamp()
-            );
-        }        
+        _emitEvents(request, affectedAssets, processRegistry);
     }
 
     // =============================================================
     //                    VALIDATION FUNCTIONS
     // =============================================================
-    function _validateRequestFields(TransactionRequest calldata request) private pure {
+    function _validateRequest(TransactionRequest calldata request) private pure {
         if (request.processId == bytes32(0)) revert InvalidProcessId();
         if (request.natureId == bytes32(0)) revert InvalidNatureId();
         if (request.stageId == bytes32(0)) revert InvalidStageId();
     }
 
     function _validateProcess(TransactionRequest calldata request, IProcessRegistry processRegistry) 
-        private 
+        internal 
         view 
     {        
         (bool processValid, string memory processError) = 
@@ -148,77 +106,60 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         }
     }
 
-    function _getProcess(TransactionRequest calldata request, IProcessRegistry processRegistry) 
-        private 
-        view 
-        returns (IProcessRegistry.Process memory) 
-    {      
-        return processRegistry.getProcess(
-            request.channelName,
-            request.processId,
-            request.natureId,
-            request.stageId
-        );
+    function _getRegistry(bytes32 registryName) internal view returns (address) {
+        return IAddressDiscovery(_getAddressDiscovery()).getContractAddress(registryName);
     }
 
     // =============================================================
-    //                    OPERATION ROUTING
+    //                    OPERATION EXECUTION
     // =============================================================
 
     /**
      * @dev Routes and executes the appropriate operation
      */
-    function _routeAndExecuteOperation(
+    function _executeOperation(
         TransactionRequest calldata request,
         IProcessRegistry processRegistry,
         IAssetRegistry assetRegistry
     ) private returns (bytes32[] memory affectedAssets) {
                 
-        IProcessRegistry.Process memory process = _getProcess(request, processRegistry);
+        IProcessRegistry.Process memory process = processRegistry.getProcess(
+            request.channelName,
+            request.processId,
+            request.natureId,
+            request.stageId
+        );
        
         // Route based on process action
         if (process.action == IProcessRegistry.ProcessAction.CREATE_ASSET) {
-            affectedAssets = _executeCreateAsset(assetRegistry, request);
-            
+            return _executeCreateAsset(assetRegistry, request);
         } else if (process.action == IProcessRegistry.ProcessAction.UPDATE_ASSET) {
-            affectedAssets = _executeUpdateAsset(assetRegistry, request);
-            
+            return _executeUpdateAsset(assetRegistry, request);
         } else if (process.action == IProcessRegistry.ProcessAction.TRANSFER_ASSET) {
-            affectedAssets = _executeTransferAsset(assetRegistry, request);
-            
+            return _executeTransferAsset(assetRegistry, request);
         } else if (process.action == IProcessRegistry.ProcessAction.TRANSFORM_ASSET) {
-            affectedAssets = _executeTransformAsset(assetRegistry, request);
-            
+            return _executeTransformAsset(assetRegistry, request);
         } else if (process.action == IProcessRegistry.ProcessAction.SPLIT_ASSET) {
-            affectedAssets = _executeSplitAsset(assetRegistry, request);
-            
+            return _executeSplitAsset(assetRegistry, request);
         } else if (process.action == IProcessRegistry.ProcessAction.GROUP_ASSET) {
-            affectedAssets = _executeGroupAssets(assetRegistry, request);
-            
+            return _executeGroupAssets(assetRegistry, request);
         } else if (process.action == IProcessRegistry.ProcessAction.UNGROUP_ASSET) {
-            affectedAssets = _executeUngroupAssets(assetRegistry, request);
-            
+            return _executeUngroupAssets(assetRegistry, request);
         } else if (process.action == IProcessRegistry.ProcessAction.INACTIVATE_ASSET) {
-            affectedAssets = _executeInactivateAsset(assetRegistry, request);
-            
+            return _executeInactivateAsset(assetRegistry, request);
         } else {
             revert UnsupportedOperation(process.action);
         }
-        
-        return affectedAssets;
     }
-
-    // =============================================================
-    //                    OPERATION IMPLEMENTATIONS
-    // =============================================================
 
     function _executeCreateAsset(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         // Generate deterministic asset ID
-        bytes32 assetId = _generateAssetId(request.channelName);
+        bytes32 assetId = _generateAssetId(request.channelName);            
         
         // Prepare input
         IAssetRegistry.CreateAssetInput memory input = IAssetRegistry.CreateAssetInput({
@@ -228,22 +169,19 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             amount: request.operationData.initialAmount,
             dataHash: request.dataHash,
             externalId: request.operationData.externalId
-        });
+        });         
         
         // Execute
         assetRegistry.createAsset(input, _msgSender());
         
-        // Return affected assets
-        affectedAssets = new bytes32[](1);
-        affectedAssets[0] = assetId;
-        
-        return affectedAssets;
+        return _singleAssetArray(assetId);        
     }
 
     function _executeUpdateAsset(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         bytes32 assetId = request.targetAssetIds[0];
         
@@ -257,16 +195,14 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         
         assetRegistry.updateAsset(input, _msgSender());
         
-        affectedAssets = new bytes32[](1);
-        affectedAssets[0] = assetId;
-        
-        return affectedAssets;
+        return _singleAssetArray(assetId);
     }
 
     function _executeTransferAsset(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         bytes32 assetId = request.targetAssetIds[0];
         
@@ -282,16 +218,14 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         
         assetRegistry.transferAsset(input, _msgSender());
         
-        affectedAssets = new bytes32[](1);
-        affectedAssets[0] = assetId;
-        
-        return affectedAssets;
+        return _singleAssetArray(assetId);
     }
 
     function _executeTransformAsset(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         bytes32 assetId = request.targetAssetIds[0];
         
@@ -305,30 +239,18 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         
         assetRegistry.transformAsset(input, _msgSender());
         
-        // For transform, we return the original asset ID
-        // The new asset ID is generated internally by AssetRegistry
-        affectedAssets = new bytes32[](1);
-        affectedAssets[0] = assetId;
-        
-        return affectedAssets;
+        return _singleAssetArray(assetId);
     }
 
     function _executeSplitAsset(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         bytes32 assetId = request.targetAssetIds[0];
         
-        // Create data hashes array for each split
-        bytes32[] memory splitDataHashes = new bytes32[](request.operationData.splitAmounts.length);
-        for (uint256 i = 0; i < splitDataHashes.length; i++) {
-            if (i < request.dataHashes.length) {
-                splitDataHashes[i] = request.dataHashes[i];
-            } else {
-                splitDataHashes[i] = request.dataHashes[0]; // Use first hash as default
-            }
-        }
+        bytes32[] memory splitDataHashes = _prepareSplitDataHashes(request);
         
         IAssetRegistry.SplitAssetInput memory input = IAssetRegistry.SplitAssetInput({
             assetId: assetId,
@@ -340,18 +262,14 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         
         assetRegistry.splitAsset(input, _msgSender());
         
-        // For split, we return the original asset ID
-        // New asset IDs are generated internally by AssetRegistry
-        affectedAssets = new bytes32[](1);
-        affectedAssets[0] = assetId;
-        
-        return affectedAssets;
+        return _singleAssetArray(assetId);
     }
 
     function _executeGroupAssets(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         bytes32 groupAssetId = _generateAssetId(request.channelName);
         
@@ -366,7 +284,7 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         assetRegistry.groupAssets(input, _msgSender());
         
         // Return both original assets and new group asset
-        affectedAssets = new bytes32[](request.targetAssetIds.length + 1);
+        bytes32[] memory affectedAssets = new bytes32[](request.targetAssetIds.length + 1);
         for (uint256 i = 0; i < request.targetAssetIds.length; i++) {
             affectedAssets[i] = request.targetAssetIds[i];
         }
@@ -378,7 +296,8 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
     function _executeUngroupAssets(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         bytes32 groupAssetId = request.targetAssetIds[0];
                 
@@ -391,16 +310,14 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
         
         assetRegistry.ungroupAssets(input, _msgSender());
         
-        affectedAssets = new bytes32[](1);
-        affectedAssets[0] = groupAssetId;
-        
-        return affectedAssets;
+        return _singleAssetArray(groupAssetId);
     }
 
     function _executeInactivateAsset(
         IAssetRegistry assetRegistry, 
         TransactionRequest calldata request
-    ) private returns (bytes32[] memory affectedAssets) {
+    ) internal returns (bytes32[] memory) 
+    {
         
         bytes32 assetId = request.targetAssetIds[0];
                 
@@ -410,32 +327,86 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
             finalLocation: request.operationData.newLocation,
             finalDataHash: request.dataHash
         });
-        
+
         assetRegistry.inactivateAsset(input, _msgSender());
         
-        affectedAssets = new bytes32[](1);
-        affectedAssets[0] = assetId;
-        
-        return affectedAssets;
+        return _singleAssetArray(assetId);
     }
 
     // =============================================================
-    //                    HELPER FUNCTIONS
+    //                    INTERNAL HELPERS
     // =============================================================
 
-    function _generateAssetId(bytes32 channelName) private returns (bytes32) {
-        _assetCounterByChannel[channelName]++;
+    function _generateAssetId(bytes32 channelName) internal returns (bytes32) {
+        _assetCounters[channelName]++;
         return keccak256(abi.encodePacked(
             channelName,
-            _assetCounterByChannel[channelName],
-            _msgSender()
+            _assetCounters[channelName],
+            _msgSender(),
+            block.timestamp
         ));
     }
 
+    function _singleAssetArray(bytes32 assetId) internal pure returns (bytes32[] memory) {
+        bytes32[] memory result = new bytes32[](1);
+        result[0] = assetId;
+        return result;
+    }
+
+    function _prepareSplitDataHashes(TransactionRequest calldata request) internal pure returns (bytes32[] memory) {
+        bytes32[] memory splitDataHashes = new bytes32[](request.operationData.splitAmounts.length);
+        for (uint256 i = 0; i < splitDataHashes.length; i++) {
+            if (i < request.dataHashes.length) {
+                splitDataHashes[i] = request.dataHashes[i];
+            } else {
+                splitDataHashes[i] = request.dataHashes[0]; // Use first hash as default
+            }
+        }
+        return splitDataHashes;
+    }
+
+    function _emitEvents(
+        TransactionRequest calldata request,
+        bytes32[] memory affectedAssets,
+        IProcessRegistry processRegistry
+    ) internal {
+        IProcessRegistry.Process memory process = processRegistry.getProcess(
+            request.channelName,
+            request.processId,
+            request.natureId,
+            request.stageId
+        );
+
+        IAssetRegistry.AssetOperation operation = _mapProcessActionToAssetOperation(process.action);
+        uint256 timestamp = Utils.timestamp();
+        
+        emit OperationExecuted(
+            request.channelName,
+            request.processId,
+            request.natureId,
+            request.stageId,
+            _msgSender(),
+            affectedAssets,
+            operation,
+            block.number,
+            timestamp
+        );
+        
+        // Simplified event emission - only essential events
+        for (uint256 i = 0; i < affectedAssets.length; i++) {
+            emit AssetModified(
+                request.channelName,
+                affectedAssets[i],
+                _msgSender(),
+                operation,
+                block.number,
+                timestamp
+            );
+        }
+    }
+
     function _mapProcessActionToAssetOperation(IProcessRegistry.ProcessAction action) 
-        private 
-        pure 
-        returns (IAssetRegistry.AssetOperation) 
+        internal pure returns (IAssetRegistry.AssetOperation) 
     {
         if (action == IProcessRegistry.ProcessAction.CREATE_ASSET) {
             return IAssetRegistry.AssetOperation.CREATE;
@@ -470,10 +441,6 @@ contract TransactionOrchestrator is Context, BaseTraceContract, ITransactionOrch
     function resumeTransactions() external onlyRole(TRANSACTION_ADMIN_ROLE) {
         _unpause();
     }
-
-    // =============================================================
-    //                    IMPLEMENTATION REQUIREMENTS
-    // =============================================================
 
     function setAddressDiscovery(address discovery) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setAddressDiscovery(discovery);

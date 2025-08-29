@@ -44,7 +44,7 @@ describe("TransactionOrchestrator - Functional Tests", function () {
 
   describe("Process Validation & Integration", function () {
     it("Should validate process exists before executing transaction", async function () {
-      const { transactionOrchestrator } = await loadFixture(deployTransactionOrchestrator);
+      const { transactionOrchestrator, processRegistry } = await loadFixture(deployTransactionOrchestrator);
 
       const invalidTransaction = {
         processId: NON_EXISTENT_PROCESS, // Process that doesn't exist
@@ -69,7 +69,8 @@ describe("TransactionOrchestrator - Functional Tests", function () {
       };
 
       await expect(transactionOrchestrator.connect(accounts.member1).submitTransaction(invalidTransaction))
-        .to.be.revertedWithCustomError(transactionOrchestrator, "TransactionValidationFailed");
+        .to.be.revertedWithCustomError(processRegistry, "ProcessNotFound")
+        .withArgs(CHANNEL_1, NON_EXISTENT_PROCESS);
     });
 
     it("Should validate process action matches operation type", async function () {
@@ -438,18 +439,6 @@ describe("TransactionOrchestrator - Functional Tests", function () {
           anyValue  // timestamp
         );
 
-      // Should emit ProcessExecuted
-      await expect(tx)
-        .to.emit(transactionOrchestrator, "ProcessExecuted")
-        .withArgs(
-          CHANNEL_1,
-          PROCESS_1,
-          NATURE_1,
-          STAGE_1,
-          accounts.member1.address,
-          anyValue  // timestamp
-        );
-
       // Should emit AssetModified for each affected asset
       await expect(tx)
         .to.emit(transactionOrchestrator, "AssetModified");
@@ -627,7 +616,8 @@ describe("TransactionOrchestrator - Functional Tests", function () {
     it("Should respect asset ownership in operations", async function () {
       const { 
         transactionOrchestrator, 
-        processRegistry
+        processRegistry,
+        assetRegistry
       } = await loadFixture(deployTransactionOrchestrator);
 
       // Member1 creates asset
@@ -670,7 +660,7 @@ describe("TransactionOrchestrator - Functional Tests", function () {
 
       // Member2 tries to update Member1's asset, should fail
       await expect(transactionOrchestrator.connect(accounts.member2).submitTransaction(updateTransaction))
-        .to.be.revertedWithCustomError(transactionOrchestrator, "NotAssetOwner")
+        .to.be.revertedWithCustomError(assetRegistry, "NotAssetOwner")
         .withArgs(CHANNEL_1, assetId, accounts.member2.address);
     });
   });
@@ -946,13 +936,13 @@ describe("TransactionOrchestrator - Functional Tests", function () {
       };
 
       await expect(transactionOrchestrator.connect(accounts.member1).submitTransaction(invalidTransaction))
-        .to.be.revertedWithCustomError(transactionOrchestrator, "TransactionValidationFailed");
+        .to.be.revertedWithCustomError(processRegistry, "ProcessNotFound")
+        .withArgs(CHANNEL_1, PROCESS_1);
     });
 
     it("Should handle address discovery updates gracefully", async function () {
       const { 
         transactionOrchestrator, 
-        addressDiscovery,
         processRegistry
       } = await loadFixture(deployTransactionOrchestrator);
 

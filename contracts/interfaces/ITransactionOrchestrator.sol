@@ -65,16 +65,13 @@ interface ITransactionOrchestrator {
         
         // SPLIT_ASSET
         uint256[] splitAmounts;       // Amounts for each split asset
-        
-        // GROUP_ASSET
-        uint256 groupAmount;          // Total amount for group
-        
-        // UPDATE_ASSET / TRANSFORM_ASSET
-        uint256 newAmount;            // Updated amount (0 = no change)
-        bytes32 newAssetId;         // New process ID (for transform)
-        
+                
+        // TRANSFORM_ASSET
+        bytes32 newAssetId;           // New asset ID (for transform)
+
         // Common fields
         string newLocation;           // Updated/new location
+        uint256 newAmount;            // Updated amount (0 = no change)
     }
     
     // =============================================================
@@ -92,19 +89,7 @@ interface ITransactionOrchestrator {
         address operator,
         bytes32[] affectedAssets,
         IAssetRegistry.AssetOperation operation,
-        uint256 indexed blockNumber,      // Block reference instead of transaction ID
-        uint256 timestamp
-    );
-
-    /**
-     * @notice Process execution event for audit
-     */
-    event ProcessExecuted(
-        bytes32 channelName,
-        bytes32 indexed processId,
-        bytes32 indexed natureId,
-        bytes32 indexed stageId,
-        address operator,
+        uint256 indexed blockNumber,      
         uint256 timestamp
     );
 
@@ -125,23 +110,11 @@ interface ITransactionOrchestrator {
     // =============================================================
 
     error TransactionValidationFailed(string errorMessage);
-    error InvalidTargetAssetsForCreate();
-    error InvalidTargetAssetCount(uint256 provided, uint256 expected);
     error UnsupportedOperation(IProcessRegistry.ProcessAction action);
-    error InvalidAmount(uint256 amount);
-    error EmptyLocation();
-    error AssetNotActive(bytes32 channelName, bytes32 assetId);
-    error NotAssetOwner(bytes32 channelName, bytes32 assetId, address caller);
     error InvalidProcessId();
     error InvalidNatureId();
     error InvalidStageId();
-    error EmptyDataHashes();
-    error TooManyDataHashes(uint256 provided, uint256 maximum);
-    error InsufficientSplitParts(uint256 provided, uint256 minimum);
-    error TooManySplits(uint256 provided, uint256 maximum);
-    error InsufficientAssetsToGroup(uint256 provided, uint256 minimum);
-    error TooManyAssetsToGroup(uint256 provided, uint256 maximum);
-
+   
     // =============================================================
     //                    MAIN FUNCTIONS
     // =============================================================
