@@ -148,14 +148,6 @@ interface ISchemaRegistry {
     // =============================================================
 
     /**
-     * Get active schema
-     * @param channelName Channel name
-     * @param schemaId Schema identifier
-     * @return schema Active schema data
-     */
-    function getSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
-    
-    /**
      * Get specific schema version
      * @param channelName The channel name
      * @param schemaId The schema ID
@@ -173,31 +165,11 @@ interface ISchemaRegistry {
     function getActiveSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
 
     /**
-     * Get latest schema (may not be active)
-     * @param channelName The channel name
-     * @param schemaId The schema ID
-     * @return schema The latest schema data
-     */
-    function getLatestSchema(bytes32 channelName, bytes32 schemaId) external view returns (Schema memory schema);
-
-    /**
-     * Get all versions of a schema
-     * @param channelName The channel name
-     * @param schemaId The schema ID
-     * @return versions Array of version numbers
-     * @return schemas Array of schema data
-     */
-    function getSchemaVersions(bytes32 channelName, bytes32 schemaId) external view returns (uint256[] memory versions, Schema[] memory schemas);
-
-    /**
      * Get information about a schema
      * @param channelName The channel name
      * @param schemaId The schema ID
      * @return latestVersion The latest schema version
      * @return activeVersion The active schema version
-     * @return hasActiveVersion True if the schema has an active version
-     * @return owner The schema owner
-     * @return totalVersions The total number of versions
      */
     function getSchemaInfo(
         bytes32 channelName, 
@@ -205,9 +177,6 @@ interface ISchemaRegistry {
     ) external view returns 
         (
             uint256 latestVersion, 
-            uint256 activeVersion, 
-            bool hasActiveVersion, 
-            address owner, 
-            uint256 totalVersions
+            uint256 activeVersion
         );
 }
