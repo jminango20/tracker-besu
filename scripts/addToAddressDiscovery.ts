@@ -14,12 +14,16 @@ async function main() {
   const accessChannelManagerAddress = deployments.AccessChannelManager?.address;
   const schemaRegistryAddress = deployments.SchemaRegistry?.address;
   const processRegistryAddress = deployments.ProcessRegistry?.address;
+  const assetRegistryAddress = deployments.AssetRegistry?.address;
+  const transactionOrchestratorAddress = deployments.TransactionOrchestrator?.address;
   
   if (
     !addressDiscoveryAddress || 
     !accessChannelManagerAddress || 
     !schemaRegistryAddress ||
-    !processRegistryAddress
+    !processRegistryAddress ||
+    !assetRegistryAddress ||
+    !transactionOrchestratorAddress
   ) {
     throw new Error("Missing contract addresses in deployment file");
   }
@@ -78,6 +82,40 @@ async function main() {
     const tx2 = await addressDiscovery.updateAddress(processRegistryId, processRegistryAddress);
     await tx2.wait();
     console.log(`✅ Registered PROCESS_REGISTRY in AddressDiscovery`);
+  }
+
+  // Asset ProcessRegistry
+  const assetRegistryId = ethers.id("ASSET_REGISTRY");
+  try {
+    const currentSR = await addressDiscovery.getContractAddress(assetRegistryId);
+    if (currentSR.toLowerCase() !== assetRegistryAddress.toLowerCase()) {
+      const tx2 = await addressDiscovery.updateAddress(assetRegistryId, assetRegistryAddress);
+      await tx2.wait();
+      console.log(`✅ Updated ASSET_REGISTRY address in AddressDiscovery`);
+    } else {
+      console.log(`ℹ️ ASSET_REGISTRY already registered in AddressDiscovery`);
+    }
+  } catch (error) {
+    const tx2 = await addressDiscovery.updateAddress(assetRegistryId, assetRegistryAddress);
+    await tx2.wait();
+    console.log(`✅ Registered ASSET_REGISTRY in AddressDiscovery`);
+  }
+
+  // Asset ProcessRegistry
+  const transactionOrchestratorId = ethers.id("TRANSACTION_ORCHESTRATOR");
+  try {
+    const currentSR = await addressDiscovery.getContractAddress(transactionOrchestratorId);
+    if (currentSR.toLowerCase() !== transactionOrchestratorAddress.toLowerCase()) {
+      const tx2 = await addressDiscovery.updateAddress(transactionOrchestratorId, transactionOrchestratorAddress);
+      await tx2.wait();
+      console.log(`✅ Updated TRANSACTION_ORCHESTRATOR address in AddressDiscovery`);
+    } else {
+      console.log(`ℹ️ TRANSACTION_ORCHESTRATOR already registered in AddressDiscovery`);
+    }
+  } catch (error) {
+    const tx2 = await addressDiscovery.updateAddress(transactionOrchestratorId, transactionOrchestratorAddress);
+    await tx2.wait();
+    console.log(`✅ Registered TRANSACTION_ORCHESTRATOR in AddressDiscovery`);
   }
   
   console.log(`Setup completed successfully!`);

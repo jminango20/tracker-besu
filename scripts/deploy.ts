@@ -40,6 +40,12 @@ async function main() {
     // 4. Deploy ProcessRegistry
     await DeploymentUtils.deployContractWithSigner("ProcessRegistry", [addressDiscoveryInfo.address], deployer);
 
+    // 5. Deploy AssetRegistry
+    await DeploymentUtils.deployContractWithSigner("AssetRegistry", [addressDiscoveryInfo.address], deployer);
+
+    // 6. Deploy TransactionOrchestrator
+    await DeploymentUtils.deployContractWithSigner("TransactionOrchestrator", [addressDiscoveryInfo.address], deployer);
+
     console.log(`\n All contracts deployed successfully!`);
     console.log(`Deployment info saved to: deployments/${network.name}.json`);
 

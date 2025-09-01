@@ -16,6 +16,8 @@
     "deploy:access-channel-manager:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deployAccessChannelManager.ts --network localhost",
     "deploy:schema-registry:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deploySchemaRegistry.ts --network localhost",
     "deploy:process-registry:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deployProcessRegistry.ts --network localhost",
+    "deploy:asset-registry:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deployAssetRegistry.ts --network localhost",
+    "deploy:transaction-orchestrator:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/deployTransactionOrchestrator.ts --network localhost",
     "address-discovery:single-contract:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/single/contractToAddressDiscovery.ts --network localhost",
     "address-discovery-admin:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/admin/addressDiscoveryAdmin.ts --network localhost",
     "access-channel-admin:localhost": "cross-env NODE_ENV=local npx hardhat run scripts/admin/accessChannelAdmin.ts --network localhost",
